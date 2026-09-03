@@ -344,7 +344,16 @@ class DesktopOverlayWindow:
         is_screen_solve = False
         
         if attach_screen:
-            app_ctx = self.context_engine.collect(self.root, include_screen=True)
+            curr_alpha = self.config.opacity
+            try:
+                self.popup_win.attributes("-alpha", 0.0)
+                self.root.update_idletasks()
+                time.sleep(0.04)
+                app_ctx = self.context_engine.collect(self.root, include_screen=True)
+            finally:
+                self.popup_win.attributes("-alpha", curr_alpha)
+                self.popup_win.lift()
+                
             if app_ctx.screen and app_ctx.screen.ocr_text:
                 ocr_len = len(app_ctx.screen.ocr_text)
                 self.expanded_view.set_output(f"📷 Screen scanned ({ocr_len} characters extracted). Analyzing with {self.config.ollama_model}...\n\n")
@@ -386,8 +395,16 @@ class DesktopOverlayWindow:
         self._cancel_stream = False
         self.expanded_view.set_output("📷 Scanning desktop screen and extracting text...\n")
         
-        # Capture directly WITHOUT hiding or refreshing the window
-        app_ctx = self.context_engine.collect(self.root, include_screen=True)
+        # Instantaneous transparent snapshot so the popup window never blocks underlying questions
+        curr_alpha = self.config.opacity
+        try:
+            self.popup_win.attributes("-alpha", 0.0)
+            self.root.update_idletasks()
+            time.sleep(0.04)
+            app_ctx = self.context_engine.collect(self.root, include_screen=True)
+        finally:
+            self.popup_win.attributes("-alpha", curr_alpha)
+            self.popup_win.lift()
         
         ocr_text = app_ctx.screen.ocr_text.strip() if (app_ctx.screen and app_ctx.screen.ocr_text) else ""
         if not ocr_text:

@@ -110,13 +110,21 @@ class ScreenCaptureEngine:
             try:
                 res = winocr.recognize_pil_sync(img, "en")
                 if isinstance(res, dict):
-                    raw_lines = [l["text"] for l in res.get("lines", []) if isinstance(l, dict) and "text" in l]
-                    if raw_lines:
-                        # Clean out obvious server URLs while preserving all text
-                        cleaned = [line.strip() for line in raw_lines if line.strip() and not line.strip().startswith("http://localhost")]
-                        ocr_text = "\n".join(cleaned) if cleaned else res.get("text", "").strip()
-                    else:
-                        ocr_text = res.get("text", "").strip()
+                    lines = []
+                    if "lines" in res and isinstance(res["lines"], list):
+                        for l in res["lines"]:
+                            if isinstance(l, dict) and "text" in l:
+                                lines.append(l["text"])
+                            elif isinstance(l, str):
+                                lines.append(l)
+                    if lines:
+                        ocr_text = "\n".join(lines)
+                    elif res.get("text"):
+                        ocr_text = str(res["text"])
+                elif hasattr(res, "text"):
+                    ocr_text = str(res.text)
+                elif hasattr(res, "lines"):
+                    ocr_text = "\n".join([str(getattr(l, "text", l)) for l in res.lines])
             except Exception as e:
                 print(f"[OCR] WinOCR Extraction Notice: {e}")
 
