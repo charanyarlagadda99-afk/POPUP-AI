@@ -38,6 +38,9 @@
 !/SECURITY.md
 !/stealer/
 !/stealer/**
+!/desktop_overlay/
+!/desktop_overlay/**
+!/floating_widget.py
 
 # Exceptions even inside allowed trees
 .env
