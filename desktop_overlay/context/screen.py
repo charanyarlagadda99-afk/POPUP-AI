@@ -60,7 +60,15 @@ def filter_screen_text(raw_text: str) -> str:
         "all rights reserved",
         "copy response",
         "start sequential block typer",
-        "http://localhost"
+        "http://localhost",
+        "no readable text was detected",
+        "no readable text",
+        "please make sure the question or window",
+        "screen scanned",
+        "characters extracted via windows ocr",
+        "solving with phi3",
+        "solving with",
+        "generation stopped by user"
     ]
     
     clean_lines = []

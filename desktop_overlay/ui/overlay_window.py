@@ -344,15 +344,13 @@ class DesktopOverlayWindow:
         is_screen_solve = False
         
         if attach_screen:
-            curr_alpha = self.config.opacity
-            try:
-                self.popup_win.attributes("-alpha", 0.0)
-                self.root.update_idletasks()
-                time.sleep(0.04)
-                app_ctx = self.context_engine.collect(self.root, include_screen=True)
-            finally:
-                self.popup_win.attributes("-alpha", curr_alpha)
-                self.popup_win.lift()
+            self.expanded_view.set_output("")
+            self.popup_win.withdraw()
+            self.root.update()
+            time.sleep(0.12)
+            app_ctx = self.context_engine.collect(self.root, include_screen=True)
+            self.popup_win.deiconify()
+            self.popup_win.lift()
                 
             if app_ctx.screen and app_ctx.screen.ocr_text:
                 ocr_len = len(app_ctx.screen.ocr_text)
@@ -393,12 +391,11 @@ class DesktopOverlayWindow:
     def handle_scan_and_solve(self) -> None:
         """One-click automated screen scanning and direct problem solving."""
         self._cancel_stream = False
-        self.expanded_view.set_output("📷 Scanning desktop screen and extracting questions...\n")
-        
-        # Step aside for 80ms to cleanly unblock the desktop for OCR
+        # Step aside to cleanly unblock the desktop for OCR
+        self.expanded_view.set_output("")
         self.popup_win.withdraw()
         self.root.update()
-        time.sleep(0.08)
+        time.sleep(0.12)
         app_ctx = self.context_engine.collect(self.root, include_screen=True)
         self.popup_win.deiconify()
         self.popup_win.lift()
