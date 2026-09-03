@@ -23,6 +23,7 @@ from desktop_overlay.ui.permission_ui import PermissionCenter
 from desktop_overlay.ui.diagnostics_ui import DiagnosticsPanel
 from desktop_overlay.ui.editor_view import EditorToolsView
 from desktop_overlay.ui.settings_ui import SettingsPanel
+from desktop_overlay.ui.snipper import ScreenSnipper
 
 class DesktopOverlayWindow:
     """Universal Desktop AI Overlay Window with permanent floating dot, Recess/Extend, and direct problem solver."""
@@ -136,6 +137,7 @@ class DesktopOverlayWindow:
             config=self.config,
             on_send_prompt=self.handle_prompt,
             on_scan_solve=self.handle_scan_and_solve,
+            on_snip_solve=self.start_snip_and_solve,
             on_stop=self.cancel_generation,
             on_run_agent=self.handle_agent_task,
             on_open_palette=lambda: self.open_mode("palette"),
@@ -453,6 +455,66 @@ class DesktopOverlayWindow:
             self.root.after(0, lambda: self.expanded_view.set_generating(False))
             
         threading.Thread(target=_stream_solve, daemon=True).start()
+
+    def start_snip_and_solve(self) -> None:
+        """Opens interactive green box snipper so user can select their exact question."""
+        self._cancel_stream = False
+        self.popup_win.withdraw()
+        self.root.update()
+        time.sleep(0.08)
+        ScreenSnipper(self.root, on_snip_completed=self.handle_region_solve)
+
+    def handle_region_solve(self, bbox: tuple[int, int, int, int]) -> None:
+        """Extracts OCR text from selected screen rectangle and solves the question directly."""
+        self._cancel_stream = False
+        self.popup_win.deiconify()
+        self.popup_win.lift()
+        self.expanded_view.set_output("🎯 Analyzing selected question region...\n")
+        self.expanded_view.set_generating(True)
+        
+        screen_ctx = self.context_engine.screen_engine.capture_region(bbox, run_ocr=True)
+        ocr_text = screen_ctx.ocr_text.strip() if screen_ctx else ""
+        
+        if not ocr_text:
+            self.expanded_view.set_output("⚠️ No readable text detected in the selected box. Please drag a slightly larger box around the question.")
+            self.expanded_view.set_generating(False)
+            return
+            
+        ocr_len = len(ocr_text)
+        self.expanded_view.set_output(f"✓ Question captured ({ocr_len} characters).\n🧠 Solving with {self.config.ollama_model}...\n\n")
+        
+        system_prompt = (
+            "You are an ultra-direct Question and MCQ answering engine.\n"
+            "Analyze the selected question text and output strictly:\n\n"
+            "Question: <The question>\n"
+            "Answer: <Direct Option and Answer ONLY>\n\n"
+            "RULES:\n"
+            "- If MCQ: Give ONLY the correct Option Letter and text (e.g. 'Answer: B) Paris' or 'Answer: Option A'). No explanation.\n"
+            "- If open question: Give ONLY the direct concise answer. No explanation.\n"
+            "- Do not write reasoning or conversational preamble."
+        )
+        full_prompt = (
+            f"Question Text:\n"
+            f"----------------------------------------\n"
+            f"{ocr_text}\n"
+            f"----------------------------------------\n\n"
+            f"TASK: Provide the direct answer to the question above.\n"
+        )
+        
+        import threading
+        def _stream_snip():
+            def on_token(t: str):
+                self.root.after(0, lambda: self.expanded_view.append_output_stream(t))
+                
+            self.llm.generate_stream(
+                full_prompt,
+                system_prompt=system_prompt,
+                on_token=on_token,
+                cancel_check=lambda: self._cancel_stream
+            )
+            self.root.after(0, lambda: self.expanded_view.set_generating(False))
+            
+        threading.Thread(target=_stream_snip, daemon=True).start()
 
     def handle_agent_task(self, prompt: str) -> None:
         """Handles agent multi-step execution."""

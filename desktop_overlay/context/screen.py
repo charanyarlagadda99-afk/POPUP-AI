@@ -37,7 +37,7 @@ class ScreenContext:
     error: Optional[str] = None
 
 def filter_screen_text(raw_text: str) -> str:
-    """Intelligently filters out terminal prompts, IDE menus, and system noise to isolate the real question."""
+    """Intelligently filters out terminal prompts, IDE menus, and self-referencing assistant status messages."""
     if not raw_text:
         return ""
         
@@ -68,7 +68,9 @@ def filter_screen_text(raw_text: str) -> str:
         "characters extracted via windows ocr",
         "solving with phi3",
         "solving with",
-        "generation stopped by user"
+        "generation stopped by user",
+        "antigravity",
+        "drag a box over your question"
     ]
     
     clean_lines = []
@@ -84,7 +86,7 @@ def filter_screen_text(raw_text: str) -> str:
             continue
         clean_lines.append(line)
         
-    return "\n".join(clean_lines) if clean_lines else raw_text.strip()
+    return "\n".join(clean_lines) if clean_lines else ""
 
 class ScreenCaptureEngine:
     """Safely captures permitted screen regions and performs high-speed OCR text extraction."""
@@ -190,7 +192,7 @@ class ScreenCaptureEngine:
                 print(f"[OCR] WinOCR Extraction Notice: {e}")
 
         # Filter out noise to isolate real questions
-        ocr_text = filter_screen_text(ocr_text)
+        filtered_text = filter_screen_text(ocr_text)
 
         # 2. Resize thumbnail for vision payload
         max_dim = 1280
@@ -206,6 +208,6 @@ class ScreenCaptureEngine:
             image_base64=b64,
             width=img.width,
             height=img.height,
-            ocr_text=ocr_text.strip(),
+            ocr_text=filtered_text.strip(),
             available=True
         )

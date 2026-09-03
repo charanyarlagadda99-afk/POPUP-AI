@@ -1,4 +1,4 @@
-"""Expanded Conversational Assistant View with Stop Generation and Settings."""
+"""Expanded Conversational Assistant View with Stop Generation, Snipping Tool, and Settings."""
 
 from __future__ import annotations
 import tkinter as tk
@@ -8,7 +8,7 @@ from desktop_overlay.config import THEMES, OverlayConfig
 from desktop_overlay.context.context_engine import ApplicationContext
 
 class ExpandedAssistantView(tk.Frame):
-    """Full desktop AI assistant with live context tags, streaming output, dedicated screen solver, stop button, and settings."""
+    """Full desktop AI assistant with live context tags, streaming output, Snipping Question Solver, stop button, and settings."""
     
     def __init__(
         self,
@@ -16,6 +16,7 @@ class ExpandedAssistantView(tk.Frame):
         config: OverlayConfig,
         on_send_prompt: Callable[[str, bool], None],
         on_scan_solve: Callable[[], None],
+        on_snip_solve: Callable[[], None],
         on_stop: Callable[[], None],
         on_run_agent: Callable[[str], None],
         on_open_palette: Callable[[], None],
@@ -23,13 +24,14 @@ class ExpandedAssistantView(tk.Frame):
         on_open_permissions: Callable[[], None],
         on_open_diagnostics: Callable[[], None],
         on_open_editor: Callable[[], None],
-        theme_name: str = "Dark"
+        theme_name: str = "Light"
     ):
-        self.t = THEMES.get(theme_name, THEMES["Dark"])
+        self.t = THEMES.get(theme_name, THEMES["Light"])
         super().__init__(master, bg=self.t["bg"], padx=10, pady=10)
         self.config = config
         self.on_send_prompt = on_send_prompt
         self.on_scan_solve = on_scan_solve
+        self.on_snip_solve = on_snip_solve
         self.on_stop = on_stop
         self.on_run_agent = on_run_agent
         self.on_open_palette = on_open_palette
@@ -111,15 +113,30 @@ class ExpandedAssistantView(tk.Frame):
         self.btn_bar = tk.Frame(f_in, bg=self.t["card"], padx=6, pady=5)
         self.btn_bar.pack(fill=tk.X)
         
-        # Dedicated Screen Scanner & Solver Button
+        # 🎯 SNIP & SOLVE QUESTION (Drag box directly over question)
+        self.btn_snip = tk.Button(
+            self.btn_bar,
+            text="🎯 Snip & Solve Question",
+            command=self._submit_snip_solve,
+            bg="#00AA44",
+            fg="#FFFFFF",
+            bd=0,
+            padx=10,
+            pady=4,
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2"
+        )
+        self.btn_snip.pack(side=tk.LEFT, padx=(0, 6))
+        
+        # 📸 FULL SCREEN SCAN & SOLVE
         self.btn_scan = tk.Button(
             self.btn_bar,
-            text="📸 Scan & Solve Screen",
+            text="📸 Scan Full Screen",
             command=self._submit_scan_solve,
             bg="#268BD2",
             fg="#FFFFFF",
             bd=0,
-            padx=10,
+            padx=9,
             pady=4,
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
@@ -128,7 +145,7 @@ class ExpandedAssistantView(tk.Frame):
         
         self.btn_agent = tk.Button(
             self.btn_bar,
-            text="⚡ Run Agent Task",
+            text="⚡ Run Agent",
             command=self._submit_agent,
             bg=self.t["btn"],
             fg=self.t["btn_fg"],
@@ -199,13 +216,15 @@ class ExpandedAssistantView(tk.Frame):
         if generating:
             self.btn_send.pack_forget()
             self.btn_stop.pack(side=tk.RIGHT)
+            self.btn_snip.config(state=tk.DISABLED)
             self.btn_scan.config(state=tk.DISABLED)
             self.btn_agent.config(state=tk.DISABLED)
         else:
             self.btn_stop.pack_forget()
             self.btn_send.pack(side=tk.RIGHT)
             self.btn_send.config(text="🚀 Send Prompt", state=tk.NORMAL)
-            self.btn_scan.config(text="📸 Scan & Solve Screen", state=tk.NORMAL)
+            self.btn_snip.config(state=tk.NORMAL)
+            self.btn_scan.config(state=tk.NORMAL)
             self.btn_agent.config(state=tk.NORMAL)
 
     def update_context_badge(self, app_ctx: ApplicationContext) -> None:
@@ -247,6 +266,11 @@ class ExpandedAssistantView(tk.Frame):
         self.set_output("")
         self.set_generating(True)
         self.on_send_prompt(prompt, self.var_attach_screen.get())
+
+    def _submit_snip_solve(self) -> None:
+        if self.is_generating: return
+        self.set_output("")
+        self.on_snip_solve()
 
     def _submit_scan_solve(self) -> None:
         if self.is_generating: return
