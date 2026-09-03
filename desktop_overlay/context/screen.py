@@ -19,6 +19,12 @@ try:
 except ImportError:
     HAS_WINOCR = False
 
+try:
+    import mss
+    HAS_MSS = True
+except ImportError:
+    HAS_MSS = False
+
 @dataclass
 class ScreenContext:
     image_base64: Optional[str] = None
@@ -33,8 +39,8 @@ class ScreenCaptureEngine:
     """Safely captures permitted screen regions and performs high-speed OCR text extraction."""
     
     def capture_fullscreen(self, run_ocr: bool = True) -> ScreenContext:
-        if not HAS_PIL:
-            return ScreenContext(available=False, error="Pillow (PIL) not installed")
+        if not HAS_PIL and not HAS_MSS:
+            return ScreenContext(available=False, error="Screenshot library not available")
         try:
             img = self._grab_screen_image()
             return self._image_to_context(img, run_ocr=run_ocr)
@@ -42,8 +48,8 @@ class ScreenCaptureEngine:
             return ScreenContext(available=False, error=str(e))
 
     def capture_region(self, bbox: tuple[int, int, int, int], run_ocr: bool = True) -> ScreenContext:
-        if not HAS_PIL:
-            return ScreenContext(available=False, error="Pillow (PIL) not installed")
+        if not HAS_PIL and not HAS_MSS:
+            return ScreenContext(available=False, error="Screenshot library not available")
         try:
             full_img = self._grab_screen_image()
             img = full_img.crop(bbox)
@@ -54,18 +60,29 @@ class ScreenCaptureEngine:
             return ScreenContext(available=False, error=str(e))
 
     def _grab_screen_image(self) -> Image.Image:
-        """Captures screen using PIL ImageGrab with safe multi-display and GDI fallback."""
-        try:
-            return ImageGrab.grab(all_screens=True)
-        except Exception:
-            pass
-            
-        try:
-            return ImageGrab.grab()
-        except Exception:
-            pass
-            
-        # Robust Windows GDI BitBlt Capture fallback
+        """Captures desktop screen using robust multi-engine fallback."""
+        # Engine 1: PIL ImageGrab
+        if HAS_PIL:
+            try:
+                return ImageGrab.grab(all_screens=True)
+            except Exception:
+                pass
+            try:
+                return ImageGrab.grab()
+            except Exception:
+                pass
+                
+        # Engine 2: MSS Hardware-accelerated screenshot
+        if HAS_MSS:
+            try:
+                with mss.MSS() as sct:
+                    monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
+                    sct_img = sct.grab(monitor)
+                    return Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX')
+            except Exception:
+                pass
+                
+        # Engine 3: Native Windows GDI BitBlt
         try:
             user32 = ctypes.windll.user32
             gdi32 = ctypes.windll.gdi32
@@ -110,21 +127,14 @@ class ScreenCaptureEngine:
             try:
                 res = winocr.recognize_pil_sync(img, "en")
                 if isinstance(res, dict):
-                    lines = []
-                    if "lines" in res and isinstance(res["lines"], list):
-                        for l in res["lines"]:
-                            if isinstance(l, dict) and "text" in l:
-                                lines.append(l["text"])
-                            elif isinstance(l, str):
-                                lines.append(l)
-                    if lines:
-                        ocr_text = "\n".join(lines)
-                    elif res.get("text"):
-                        ocr_text = str(res["text"])
+                    text_val = res.get("text", "").strip()
+                    lines_val = [l.get("text", "").strip() for l in res.get("lines", []) if isinstance(l, dict) and l.get("text")]
+                    if lines_val:
+                        ocr_text = "\n".join(lines_val)
+                    elif text_val:
+                        ocr_text = text_val
                 elif hasattr(res, "text"):
-                    ocr_text = str(res.text)
-                elif hasattr(res, "lines"):
-                    ocr_text = "\n".join([str(getattr(l, "text", l)) for l in res.lines])
+                    ocr_text = str(res.text).strip()
             except Exception as e:
                 print(f"[OCR] WinOCR Extraction Notice: {e}")
 

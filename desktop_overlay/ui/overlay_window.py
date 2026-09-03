@@ -391,22 +391,22 @@ class DesktopOverlayWindow:
         threading.Thread(target=_stream, daemon=True).start()
 
     def handle_scan_and_solve(self) -> None:
-        """One-click automated screen scanning and direct problem solving WITHOUT window flicker or refresh."""
+        """One-click automated screen scanning and direct problem solving."""
         self._cancel_stream = False
-        self.expanded_view.set_output("📷 Scanning desktop screen and extracting text...\n")
+        self.expanded_view.set_output("📷 Scanning desktop screen and extracting questions...\n")
         
-        # Instantaneous transparent snapshot so the popup window never blocks underlying questions
-        curr_alpha = self.config.opacity
-        try:
-            self.popup_win.attributes("-alpha", 0.0)
-            self.root.update_idletasks()
-            time.sleep(0.04)
-            app_ctx = self.context_engine.collect(self.root, include_screen=True)
-        finally:
-            self.popup_win.attributes("-alpha", curr_alpha)
-            self.popup_win.lift()
+        # Step aside for 80ms to cleanly unblock the desktop for OCR
+        self.popup_win.withdraw()
+        self.root.update()
+        time.sleep(0.08)
+        app_ctx = self.context_engine.collect(self.root, include_screen=True)
+        self.popup_win.deiconify()
+        self.popup_win.lift()
         
         ocr_text = app_ctx.screen.ocr_text.strip() if (app_ctx.screen and app_ctx.screen.ocr_text) else ""
+        if not ocr_text and app_ctx.clipboard_text:
+            ocr_text = app_ctx.clipboard_text.strip()
+            
         if not ocr_text:
             self.expanded_view.set_output(
                 "⚠️ No readable text was detected on your screen.\n\n"
