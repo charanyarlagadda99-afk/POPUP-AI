@@ -1,8 +1,9 @@
-"""Screen context extraction and OCR snapshot pipeline."""
+"""Screen context extraction, smart noise filtering, and OCR snapshot pipeline."""
 
 from __future__ import annotations
 import base64
 import io
+import re
 import ctypes
 from typing import Optional
 from dataclasses import dataclass
@@ -34,6 +35,48 @@ class ScreenContext:
     ocr_text: str = ""
     available: bool = False
     error: Optional[str] = None
+
+def filter_screen_text(raw_text: str) -> str:
+    """Intelligently filters out terminal prompts, IDE menus, and system noise to isolate the real question."""
+    if not raw_text:
+        return ""
+        
+    noise_phrases = [
+        "are you sure you want to paste",
+        "windows powershell",
+        "command prompt",
+        "desktop ai assistant",
+        "ai response & solutions",
+        "scan & solve screen",
+        "run agent task",
+        "send prompt",
+        "ask or instruct",
+        "file edit selection view",
+        "visual studio code",
+        "powershell.exe",
+        "python.exe",
+        "attach screen context",
+        "copyright (c) microsoft",
+        "all rights reserved",
+        "copy response",
+        "start sequential block typer",
+        "http://localhost"
+    ]
+    
+    clean_lines = []
+    for l in raw_text.splitlines():
+        line = l.strip()
+        if not line or len(line) < 2:
+            continue
+        line_lower = line.lower()
+        if any(noise in line_lower for noise in noise_phrases):
+            continue
+        # Strip shell paths and prompts
+        if line.startswith("PS ") or line.startswith(">>>") or line.startswith("C:\\") or line.startswith("D:\\"):
+            continue
+        clean_lines.append(line)
+        
+    return "\n".join(clean_lines) if clean_lines else raw_text.strip()
 
 class ScreenCaptureEngine:
     """Safely captures permitted screen regions and performs high-speed OCR text extraction."""
@@ -137,6 +180,9 @@ class ScreenCaptureEngine:
                     ocr_text = str(res.text).strip()
             except Exception as e:
                 print(f"[OCR] WinOCR Extraction Notice: {e}")
+
+        # Filter out noise to isolate real questions
+        ocr_text = filter_screen_text(ocr_text)
 
         # 2. Resize thumbnail for vision payload
         max_dim = 1280

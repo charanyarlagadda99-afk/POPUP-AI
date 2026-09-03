@@ -423,24 +423,22 @@ class DesktopOverlayWindow:
             images.append(app_ctx.screen.image_base64)
             
         system_prompt = (
-            "You are an ultra-direct Question and MCQ answering engine. "
-            "Your task is to analyze the text provided from the user's screen, locate the primary question or multiple-choice question (MCQ), and output ONLY the direct answer.\n\n"
-            "STRICT OUTPUT FORMAT:\n"
-            "Question: <Exact question found in the screen text>\n"
-            "Answer: <Direct answer ONLY>\n\n"
+            "You are an ultra-direct Question and MCQ answering engine.\n"
+            "Analyze the provided screen text, find the primary question or multiple-choice question (MCQ), and output strictly:\n\n"
+            "Question: <The exact question found on screen>\n"
+            "Answer: <Direct Option and Answer ONLY>\n\n"
             "RULES:\n"
-            "1. If it is an MCQ (Multiple Choice Question): Under 'Answer:', provide ONLY the correct Option Letter and text (e.g., 'Answer: B) Paris' or 'Answer: Option A'). DO NOT write any explanation, working, or steps.\n"
-            "2. If it is an open/written question: Under 'Answer:', provide ONLY the direct concise written answer. DO NOT write explanations or filler.\n"
-            "3. Ignore all unrelated background application UI menus, taskbar items, and filenames.\n"
-            "4. Absolutely NO introductory text, NO 'Based on the screen', NO conversational filler."
+            "- If MCQ: Give ONLY the correct Option Letter and text (e.g. 'Answer: B) Paris' or 'Answer: Option A'). No explanation.\n"
+            "- If open question: Give ONLY the direct concise answer. No explanation.\n"
+            "- Ignore any terminal commands, file paths, or IDE menus.\n"
+            "- Do not write reasoning or conversational preamble."
         )
         full_prompt = (
-            f"Visible Text Extracted From Desktop Screen:\n"
+            f"Screen Text:\n"
             f"----------------------------------------\n"
             f"{ocr_text}\n"
             f"----------------------------------------\n\n"
-            f"TASK: Locate the primary question in the screen text above and provide ONLY the direct answer without explanation.\n"
-            f"Question:"
+            f"TASK: Find the question in the screen text above and provide the direct answer.\n"
         )
         
         import threading
@@ -448,7 +446,6 @@ class DesktopOverlayWindow:
             def on_token(t: str):
                 self.root.after(0, lambda: self.expanded_view.append_output_stream(t))
                 
-            self.root.after(0, lambda: self.expanded_view.append_output_stream("Question: "))
             self.llm.generate_stream(
                 full_prompt,
                 system_prompt=system_prompt,
