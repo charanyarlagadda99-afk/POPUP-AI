@@ -39,10 +39,16 @@ class OverlayConfig:
     allow_file_access: bool = True
     
     # AI Engine
-    ai_provider: str = "Ollama"  # "Ollama", "CustomAPI"
+    ai_provider: str = "Ollama"  # "Ollama", "Groq", "Grok", "DeepSeek", "OpenAI", "OpenRouter", "CustomAPI"
     ollama_url: str = "http://localhost:11434/api/generate"
-    ollama_model: str = "Qwen3.6:latest"
-    available_models: list[str] = field(default_factory=lambda: ["Qwen3.6:latest", "phi3:latest", "phi3", "llama3.2", "llava", "qwen2.5:3b", "mistral"])
+    ollama_model: str = "phi3:latest"
+    available_models: list[str] = field(default_factory=lambda: ["phi3:latest", "phi3", "llama3.2", "qwen2.5:3b", "llava", "mistral"])
+    
+    # Cloud API Configuration
+    api_key: str = ""
+    api_base_url: str = "https://api.groq.com/openai/v1/chat/completions"
+    api_model: str = "llama-3.3-70b-versatile"
+    
     streaming: bool = True
     temperature: float = 0.7
     max_tokens: int = 1500

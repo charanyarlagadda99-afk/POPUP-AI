@@ -1,4 +1,4 @@
-"""LLM Provider supporting streaming from Ollama and local APIs."""
+"""LLM Provider supporting streaming from Local Ollama and Cloud APIs (Groq, Grok, DeepSeek, OpenAI, OpenRouter)."""
 
 from __future__ import annotations
 import json
@@ -8,7 +8,7 @@ from typing import Callable, Optional, Generator
 from desktop_overlay.config import OverlayConfig
 
 class LLMProvider:
-    """Manages communication with Ollama and local LLM endpoints with streaming support."""
+    """Manages communication with local Ollama and Cloud OpenAI-compatible endpoints with streaming support."""
     
     def __init__(self, config: OverlayConfig):
         self.config = config
@@ -18,7 +18,7 @@ class LLMProvider:
         """Dynamically queries Ollama /api/tags for all installed local models."""
         try:
             url = f"{ollama_host.rstrip('/')}/api/tags"
-            req = urllib.request.Request(url, headers={"User-Agent": "DesktopAI/1.0"})
+            req = urllib.request.Request(url, headers={"User-Agent": "PopUpAI/1.0"})
             with urllib.request.urlopen(req, timeout=4) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 models = [m["name"] for m in data.get("models", []) if "name" in m]
@@ -26,7 +26,7 @@ class LLMProvider:
                     return models
         except Exception:
             pass
-        return ["Qwen3.6:latest", "phi3", "llama3.2", "qwen2.5:3b", "llava", "mistral"]
+        return ["phi3:latest", "phi3", "llama3.2", "qwen2.5:3b", "llava", "mistral"]
 
     def generate_stream(
         self,
@@ -37,9 +37,32 @@ class LLMProvider:
         cancel_check: Optional[Callable[[], bool]] = None
     ) -> str:
         """
-        Streams response from Ollama endpoint.
-        Supports multimodal image inputs via base64 encoded strings in images list.
+        Streams response from active AI provider (Local Ollama or Cloud API).
         """
+        if self.config.ai_provider != "Ollama" and self.config.api_key.strip():
+            return self._generate_stream_openai_compatible(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                on_token=on_token,
+                cancel_check=cancel_check
+            )
+            
+        return self._generate_stream_ollama(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            images=images,
+            on_token=on_token,
+            cancel_check=cancel_check
+        )
+
+    def _generate_stream_ollama(
+        self,
+        prompt: str,
+        system_prompt: str,
+        images: Optional[list[str]] = None,
+        on_token: Optional[Callable[[str], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None
+    ) -> str:
         url = self.config.ollama_url
         model = self.config.ollama_model
         
@@ -53,7 +76,6 @@ class LLMProvider:
                 "num_predict": self.config.max_tokens
             }
         }
-        # Only attach raw image tensors if the model architecture natively supports vision
         model_lower = model.lower()
         supports_vision = any(v in model_lower for v in ["vision", "llava", "moondream", "minicpm", "bakllava"])
         if images and supports_vision:
@@ -85,7 +107,7 @@ class LLMProvider:
             except Exception:
                 pass
             if "does not support images" in err_body.lower() or "image" in err_body.lower():
-                err_msg = f"⚠️ [Vision Error]: The selected model '{model}' is a text-only model and cannot analyze images directly.\n\nTo analyze screenshots with raw pixels, switch the model dropdown to a vision-capable model (like 'llava' or 'llama3.2-vision') in Ollama:\n`ollama pull llava`"
+                err_msg = f"⚠️ [Vision Error]: The selected model '{model}' is a text-only model and cannot analyze images directly.\n\nTo analyze screenshots with raw pixels, switch the model dropdown to a vision-capable model (like 'llava') in Ollama:\n`ollama pull llava`"
             else:
                 err_msg = f"[Ollama Error {e.code}]: {e.reason}\n{err_body}"
             if on_token:
@@ -98,6 +120,81 @@ class LLMProvider:
             return err_msg
         except Exception as e:
             err_msg = f"[LLM Error] {e}"
+            if on_token:
+                on_token(err_msg)
+            return err_msg
+
+    def _generate_stream_openai_compatible(
+        self,
+        prompt: str,
+        system_prompt: str,
+        on_token: Optional[Callable[[str], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None
+    ) -> str:
+        """Streams response from OpenAI-compatible cloud endpoints (Groq, Grok, DeepSeek, OpenAI, OpenRouter)."""
+        url = self.config.api_base_url
+        model = self.config.api_model
+        api_key = self.config.api_key.strip()
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": True,
+            "temperature": self.config.temperature,
+            "max_tokens": self.config.max_tokens
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "PopUpAI/1.0"
+        }
+        
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers)
+        
+        full_response = []
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                for raw_line in response:
+                    if cancel_check and cancel_check():
+                        break
+                    line = raw_line.decode("utf-8").strip()
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                token = delta.get("content", "")
+                                if token:
+                                    full_response.append(token)
+                                    if on_token:
+                                        on_token(token)
+                        except Exception:
+                            pass
+                            
+            return "".join(full_response)
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8")
+            except Exception:
+                pass
+            err_msg = f"[{self.config.ai_provider} API Error {e.code}]: {e.reason}\n{err_body}"
+            if on_token:
+                on_token(err_msg)
+            return err_msg
+        except Exception as e:
+            err_msg = f"[{self.config.ai_provider} Error]: {e}"
             if on_token:
                 on_token(err_msg)
             return err_msg
