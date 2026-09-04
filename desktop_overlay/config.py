@@ -41,8 +41,8 @@ class OverlayConfig:
     # AI Engine
     ai_provider: str = "Ollama"  # "Ollama", "Groq", "Grok", "DeepSeek", "OpenAI", "OpenRouter", "CustomAPI"
     ollama_url: str = "http://localhost:11434/api/generate"
-    ollama_model: str = "phi3:latest"
-    available_models: list[str] = field(default_factory=lambda: ["phi3:latest", "phi3", "llama3.2", "qwen2.5:3b", "llava", "mistral"])
+    ollama_model: str = "llama3.2:3b"
+    available_models: list[str] = field(default_factory=lambda: ["llama3.2:3b", "qwen2.5-coder:3b", "phi3:latest", "phi3"])
     
     # Cloud API Configuration
     api_key: str = ""
