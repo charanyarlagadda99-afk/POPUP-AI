@@ -439,7 +439,6 @@ class DesktopOverlayWindow:
         """Handles streaming prompt request."""
         self._cancel_stream = False
         images = []
-        is_screen_solve = False
         
         if attach_screen:
             self.expanded_view.set_output("")
@@ -452,41 +451,17 @@ class DesktopOverlayWindow:
                 
             if app_ctx.screen and app_ctx.screen.ocr_text:
                 ocr_len = len(app_ctx.screen.ocr_text)
-                self.expanded_view.set_output(f"📷 Screen scanned ({ocr_len} characters extracted). Analyzing with {self._get_active_model_name()}...\n\n")
-                is_screen_solve = True
+                self.expanded_view.set_output(f"📷 Screen context attached ({ocr_len} characters extracted). Thinking with {self._get_active_model_name()}...\n\n")
+                if app_ctx.screen.image_base64:
+                    images.append(app_ctx.screen.image_base64)
+                full_prompt = f"Screen Text:\n{app_ctx.screen.ocr_text}\n\nUser Question:\n{prompt}"
             else:
                 self.expanded_view.set_output("⚠️ Screen text could not be extracted.\n\n")
+                full_prompt = prompt
         else:
-            app_ctx = self.context_engine.collect(self.root, include_screen=False)
+            full_prompt = prompt
             
-        context_prefix = app_ctx.to_prompt_context()
-        system_prompt = (
-            "You are an expert universal desktop problem solver, quiz master, and senior software engineer.\n"
-            "Analyze the text captured from the screen. Detect the question type and provide the optimal structured format:\n\n"
-            "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
-            "   Question: <The question>\n"
-            "   Answer: <Exact Option Letter and Option Text ONLY — e.g., 'B) Paris' or 'Option C: O(n log n)'>\n\n"
-            "2. CODING / PROGRAMMING / ALGORITHM QUESTIONS:\n"
-            "   Problem: <Summary of problem/bug/task>\n"
-            "   Solution Code:\n"
-            "   ```<language>\n"
-            "   <Clean, complete, fully working code solution>\n"
-            "   ```\n"
-            "   Explanation: <1-2 concise bullet points on how it works/complexity>\n\n"
-            "3. MATH / NUMERICAL / CALCULATION QUESTIONS:\n"
-            "   Question: <The mathematical/logical question>\n"
-            "   Formula & Steps: <Key calculation steps>\n"
-            "   Final Answer: <Exact calculated value/result>\n\n"
-            "4. GENERAL / THEORETICAL / CONCEPTUAL QUESTIONS:\n"
-            "   Question: <The question>\n"
-            "   Answer: <Direct, high-yield structured answer without conversational fluff>\n\n"
-            "RULES:\n"
-            "- If MCQ: Output ONLY the correct Option Letter and text under Answer. No unnecessary filler.\n"
-            "- If Coding: Always provide clean, complete, working code in markdown blocks.\n"
-            "- Ignore all unrelated application menus, taskbars, and terminal messages.\n"
-            "- No conversational greetings or filler."
-        )
-        full_prompt = f"Desktop Context:\n{context_prefix}\n\nUser Request: {prompt}\nAnswer:" if context_prefix else prompt
+        system_prompt = "You are a helpful, intelligent desktop AI assistant. Answer the user's questions, requests, and coding tasks accurately, directly, and clearly. If writing code, provide clean, complete, working code."
         
         import threading
         def _stream():
@@ -546,39 +521,8 @@ class DesktopOverlayWindow:
         if app_ctx.screen and app_ctx.screen.image_base64:
             images.append(app_ctx.screen.image_base64)
             
-        system_prompt = (
-            "You are an expert universal desktop problem solver, quiz master, and senior software engineer.\n"
-            "Analyze the text captured from the screen. Detect the question type and provide the optimal structured format:\n\n"
-            "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
-            "   Question: <The question>\n"
-            "   Answer: <Exact Option Letter and Option Text ONLY — e.g., 'B) Paris' or 'Option C: O(n log n)'>\n\n"
-            "2. CODING / PROGRAMMING / ALGORITHM QUESTIONS:\n"
-            "   Problem: <Summary of problem/bug/task>\n"
-            "   Solution Code:\n"
-            "   ```<language>\n"
-            "   <Clean, complete, fully working code solution>\n"
-            "   ```\n"
-            "   Explanation: <1-2 concise bullet points on how it works/complexity>\n\n"
-            "3. MATH / NUMERICAL / CALCULATION QUESTIONS:\n"
-            "   Question: <The mathematical/logical question>\n"
-            "   Formula & Steps: <Key calculation steps>\n"
-            "   Final Answer: <Exact calculated value/result>\n\n"
-            "4. GENERAL / THEORETICAL / CONCEPTUAL QUESTIONS:\n"
-            "   Question: <The question>\n"
-            "   Answer: <Direct, high-yield structured answer without conversational fluff>\n\n"
-            "RULES:\n"
-            "- If MCQ: Output ONLY the correct Option Letter and text under Answer. No unnecessary filler.\n"
-            "- If Coding: Always provide clean, complete, working code in markdown blocks.\n"
-            "- Ignore all unrelated application menus, taskbars, and terminal messages.\n"
-            "- No conversational greetings or filler."
-        )
-        full_prompt = (
-            f"Screen Text:\n"
-            f"----------------------------------------\n"
-            f"{ocr_text}\n"
-            f"----------------------------------------\n\n"
-            f"TASK: Detect the question or problem above and provide the direct, complete solution.\n"
-        )
+        system_prompt = "You are an intelligent desktop assistant. Analyze the screen text and provide direct, accurate answers or working code solutions."
+        full_prompt = f"Screen Text:\n{ocr_text}\n\nProvide the direct answer or solution."
         
         import threading
         def _stream_solve():
@@ -635,39 +579,8 @@ class DesktopOverlayWindow:
         ocr_len = len(ocr_text)
         self.expanded_view.set_output(f"✓ Question captured ({ocr_len} characters).\n🧠 Solving with {self._get_active_model_name()}...\n\n")
         
-        system_prompt = (
-            "You are an expert universal desktop problem solver, quiz master, and senior software engineer.\n"
-            "Analyze the text captured from the screen. Detect the question type and provide the optimal structured format:\n\n"
-            "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
-            "   Question: <The question>\n"
-            "   Answer: <Exact Option Letter and Option Text ONLY — e.g., 'B) Paris' or 'Option C: O(n log n)'>\n\n"
-            "2. CODING / PROGRAMMING / ALGORITHM QUESTIONS:\n"
-            "   Problem: <Summary of problem/bug/task>\n"
-            "   Solution Code:\n"
-            "   ```<language>\n"
-            "   <Clean, complete, fully working code solution>\n"
-            "   ```\n"
-            "   Explanation: <1-2 concise bullet points on how it works/complexity>\n\n"
-            "3. MATH / NUMERICAL / CALCULATION QUESTIONS:\n"
-            "   Question: <The mathematical/logical question>\n"
-            "   Formula & Steps: <Key calculation steps>\n"
-            "   Final Answer: <Exact calculated value/result>\n\n"
-            "4. GENERAL / THEORETICAL / CONCEPTUAL QUESTIONS:\n"
-            "   Question: <The question>\n"
-            "   Answer: <Direct, high-yield structured answer without conversational fluff>\n\n"
-            "RULES:\n"
-            "- If MCQ: Output ONLY the correct Option Letter and text under Answer. No unnecessary filler.\n"
-            "- If Coding: Always provide clean, complete, working code in markdown blocks.\n"
-            "- Ignore all unrelated application menus, taskbars, and terminal messages.\n"
-            "- No conversational greetings or filler."
-        )
-        full_prompt = (
-            f"Question Text:\n"
-            f"----------------------------------------\n"
-            f"{ocr_text}\n"
-            f"----------------------------------------\n\n"
-            f"TASK: Provide the direct, complete answer or working code to the question above.\n"
-        )
+        system_prompt = "You are an intelligent desktop assistant. Analyze the captured question or coding problem and provide the direct, accurate answer or solution."
+        full_prompt = ocr_text
         
         import threading
         def _stream_snip():
