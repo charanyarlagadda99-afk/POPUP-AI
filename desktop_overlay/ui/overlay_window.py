@@ -55,7 +55,7 @@ class DesktopOverlayWindow:
         self.history_mgr = HistoryManager()
         
         # 1. PERMANENT FLOATING DOT (ROOT WINDOW)
-        self.root.title("AI Dot")
+        self.root.title("Pop-up AI Dot")
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", self.config.always_on_top)
         
@@ -97,7 +97,7 @@ class DesktopOverlayWindow:
 
     def _create_assistant_window(self) -> None:
         self.popup_win = tk.Toplevel(self.root)
-        self.popup_win.title("Universal Desktop AI Assistant")
+        self.popup_win.title("Pop-up AI")
         self.popup_win.overrideredirect(True)
         self.popup_win.attributes("-topmost", self.config.always_on_top)
         self.popup_win.attributes("-alpha", self.config.opacity)
@@ -115,7 +115,7 @@ class DesktopOverlayWindow:
         self.hdr = tk.Frame(self.popup_win, bg=self.t["card"], height=30, cursor="fleur")
         self.hdr.pack(fill=tk.X)
         
-        self.lbl_hdr_title = tk.Label(self.hdr, text="✦ Desktop AI Assistant", bg=self.t["card"], fg=self.t["fg_dim"], font=("Segoe UI", 9, "bold"))
+        self.lbl_hdr_title = tk.Label(self.hdr, text="✦ Pop-up AI", bg=self.t["card"], fg=self.t["fg_dim"], font=("Segoe UI", 9, "bold"))
         self.lbl_hdr_title.pack(side=tk.LEFT, padx=10)
         
         # Ghost mode badge (hidden by default)

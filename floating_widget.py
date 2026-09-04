@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Universal Desktop AI Overlay & Watermark Remover.
+Pop-up AI - Universal Desktop AI Assistant & Screen Problem Solver.
 Main Entry Point.
 """
 
