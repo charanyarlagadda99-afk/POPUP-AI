@@ -1,4 +1,4 @@
-"""Master Floating Overlay Window Manager with Permanent Dot, Recess/Extend, Settings, and Direct OCR Solving."""
+"""Master Floating Overlay Window Manager with Code Sandbox, Auto-Paste, History, Ghost Mode, and Direct OCR Solving."""
 
 from __future__ import annotations
 import sys
@@ -11,9 +11,12 @@ from desktop_overlay.security.permissions import PermissionManager
 from desktop_overlay.security.capture_guard import CaptureGuard
 from desktop_overlay.security.audit import AuditLogger
 from desktop_overlay.platform_layer.capability_matrix import CapabilityMatrix
+from desktop_overlay.platform_layer.win32_api import set_click_through, paste_into_active_window
 from desktop_overlay.context.context_engine import ContextEngine, ApplicationContext
 from desktop_overlay.agent.llm_provider import LLMProvider
 from desktop_overlay.agent.engine import AgentEngine
+from desktop_overlay.history.history_manager import HistoryManager
+from desktop_overlay.sandbox.code_runner import CodeSandboxEngine
 
 from desktop_overlay.ui.compact_mode import CompactLauncher
 from desktop_overlay.ui.expanded_mode import ExpandedAssistantView
@@ -23,10 +26,12 @@ from desktop_overlay.ui.permission_ui import PermissionCenter
 from desktop_overlay.ui.diagnostics_ui import DiagnosticsPanel
 from desktop_overlay.ui.editor_view import EditorToolsView
 from desktop_overlay.ui.settings_ui import SettingsPanel
+from desktop_overlay.ui.history_view import HistoryView
+from desktop_overlay.ui.sandbox_view import SandboxView
 from desktop_overlay.ui.snipper import ScreenSnipper
 
 class DesktopOverlayWindow:
-    """Universal Desktop AI Overlay Window with permanent floating dot, Recess/Extend, and direct problem solver."""
+    """Universal Desktop AI Overlay Window with permanent floating dot, Sandbox, Auto-Paste, Ghost Mode, and History."""
     
     def __init__(self, root: tk.Tk, config: Optional[OverlayConfig] = None):
         self.root = root
@@ -36,6 +41,8 @@ class DesktopOverlayWindow:
         # State
         self._cancel_stream = False
         self.is_recessed = False
+        self.is_ghost_mode = False
+        self.is_boss_hidden = False
         self._saved_height = max(520, self.config.overlay_height)
         
         # Core Subsystems
@@ -45,6 +52,7 @@ class DesktopOverlayWindow:
         self.context_engine = ContextEngine(self.permissions)
         self.llm = LLMProvider(self.config)
         self.agent = AgentEngine(self.llm, self.permissions, self.audit)
+        self.history_mgr = HistoryManager()
         
         # 1. PERMANENT FLOATING DOT (ROOT WINDOW)
         self.root.title("AI Dot")
@@ -98,7 +106,7 @@ class DesktopOverlayWindow:
         # Position assistant window centered
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        w, h = max(600, self.config.overlay_width), max(520, self.config.overlay_height)
+        w, h = max(640, self.config.overlay_width), max(520, self.config.overlay_height)
         pos_x = max(20, min(sw - w - 20, (sw - w) // 2))
         pos_y = max(20, min(sh - h - 20, (sh - h) // 2))
         self.popup_win.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
@@ -110,12 +118,15 @@ class DesktopOverlayWindow:
         self.lbl_hdr_title = tk.Label(self.hdr, text="✦ Desktop AI Assistant", bg=self.t["card"], fg=self.t["fg_dim"], font=("Segoe UI", 9, "bold"))
         self.lbl_hdr_title.pack(side=tk.LEFT, padx=10)
         
+        # Ghost mode badge (hidden by default)
+        self.lbl_ghost_badge = tk.Label(self.hdr, text="🪟 GHOST MODE ACTIVE (Press Ctrl+Shift+G to disable)", bg="#D20F39", fg="#FFFFFF", font=("Segoe UI", 8, "bold"), padx=6, pady=1)
+        
         # Window controls: Close & Recess/Extend button
         self.btn_close = tk.Label(self.hdr, text="✕", bg=self.t["card"], fg=self.t["fg_dim"], font=("Segoe UI", 10), cursor="hand2")
         self.btn_close.pack(side=tk.RIGHT, padx=(4, 10))
         self.btn_close.bind("<Button-1>", lambda e: self.popup_win.withdraw())
         
-        # RECESS / EXTEND BUTTON (Compress down to slim bar or decompress back up)
+        # RECESS / EXTEND BUTTON
         self.btn_recess = tk.Label(self.hdr, text="▲ Recess", bg=self.t["card"], fg=self.t["fg_dim"], font=("Segoe UI", 8, "bold"), cursor="hand2")
         self.btn_recess.pack(side=tk.RIGHT, padx=6)
         self.btn_recess.bind("<Button-1>", lambda e: self.toggle_recess())
@@ -131,7 +142,7 @@ class DesktopOverlayWindow:
         self.view_frame = tk.Frame(self.popup_win, bg=self.t["bg"])
         self.view_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Views
+        # 1. Main Assistant View
         self.expanded_view = ExpandedAssistantView(
             self.view_frame,
             config=self.config,
@@ -140,6 +151,11 @@ class DesktopOverlayWindow:
             on_snip_solve=self.start_snip_and_solve,
             on_stop=self.cancel_generation,
             on_run_agent=self.handle_agent_task,
+            on_auto_paste=self.handle_auto_paste,
+            on_run_sandbox=self.run_in_sandbox,
+            on_toggle_ghost=self.toggle_ghost_mode,
+            on_open_history=lambda: self.open_mode("history"),
+            on_open_sandbox=lambda: self.open_mode("sandbox"),
             on_open_palette=lambda: self.open_mode("palette"),
             on_open_settings=lambda: self.open_mode("settings"),
             on_open_permissions=lambda: self.open_mode("permissions"),
@@ -148,6 +164,22 @@ class DesktopOverlayWindow:
             theme_name=self.config.theme
         )
         
+        # 2. History View
+        self.history_view = HistoryView(
+            self.view_frame,
+            history_mgr=self.history_mgr,
+            on_back=lambda: self.open_mode("expanded"),
+            theme_name=self.config.theme
+        )
+        
+        # 3. Sandbox View
+        self.sandbox_view = SandboxView(
+            self.view_frame,
+            on_back=lambda: self.open_mode("expanded"),
+            theme_name=self.config.theme
+        )
+        
+        # 4. Auxiliary Panels
         self.agent_view = AgentExecutionView(
             self.view_frame,
             on_cancel=self.agent.cancel,
@@ -231,7 +263,6 @@ class DesktopOverlayWindow:
     def toggle_recess(self, event=None) -> None:
         """Compresses/recesses the window into a slim title bar or decompresses/extends it back up."""
         if not self.is_recessed:
-            # Compress / Recess
             self._saved_height = max(400, self.popup_win.winfo_height())
             self.view_frame.pack_forget()
             self.resize_grip.place_forget()
@@ -240,7 +271,6 @@ class DesktopOverlayWindow:
             self.btn_recess.config(text="▼ Extend", fg=self.t["accent"])
             self.is_recessed = True
         else:
-            # Decompress / Extend
             w = self.popup_win.winfo_width()
             h = self._saved_height
             self.popup_win.geometry(f"{w}x{h}")
@@ -248,6 +278,51 @@ class DesktopOverlayWindow:
             self.resize_grip.place(relx=1.0, rely=1.0, anchor="se", x=-2, y=-2)
             self.btn_recess.config(text="▲ Recess", fg=self.t["fg_dim"])
             self.is_recessed = False
+
+    def toggle_ghost_mode(self) -> None:
+        """Toggles click-through 'Ghost Mode' using WS_EX_TRANSPARENT."""
+        self.is_ghost_mode = not self.is_ghost_mode
+        try:
+            hwnd = int(self.popup_win.wm_frame(), 16) if hasattr(self.popup_win, 'wm_frame') else self.popup_win.winfo_id()
+            set_click_through(hwnd, self.is_ghost_mode)
+            if self.is_ghost_mode:
+                self.lbl_ghost_badge.pack(side=tk.LEFT, padx=10)
+                self.expanded_view.set_output("🪟 GHOST MODE ENABLED:\nMouse clicks now pass directly through this window to whatever is behind it!\n\nTo disable Ghost Mode anytime, press: Ctrl + Shift + G")
+            else:
+                self.lbl_ghost_badge.pack_forget()
+        except Exception as e:
+            print(f"[GhostMode] Error: {e}")
+
+    def toggle_boss_key(self) -> None:
+        """Emergency Boss Key: instantly hides or restores all UI without a trace."""
+        if not self.is_boss_hidden:
+            self.popup_win.withdraw()
+            self.root.withdraw()
+            self.is_boss_hidden = True
+        else:
+            self.root.deiconify()
+            self.is_boss_hidden = False
+
+    def handle_auto_paste(self) -> None:
+        """Instantly auto-pastes the clean solution or code into the user's active window."""
+        text = self.expanded_view.get_output_text()
+        if not text: return
+        clean_text = CodeSandboxEngine.extract_clean_code_or_answer(text)
+        
+        # Step aside, focus target window, and inject paste event
+        self.popup_win.withdraw()
+        self.root.update()
+        time.sleep(0.08)
+        paste_into_active_window(clean_text)
+        time.sleep(0.10)
+        self.popup_win.deiconify()
+        self.popup_win.lift()
+
+    def run_in_sandbox(self, code_text: str) -> None:
+        """Loads code into Sandbox and executes it."""
+        self.open_mode("sandbox")
+        self.sandbox_view.load_code(code_text)
+        self.sandbox_view.run_code()
 
     def apply_opacity(self, opacity: float) -> None:
         try:
@@ -270,7 +345,6 @@ class DesktopOverlayWindow:
         self.config.theme = theme_name
         self.config.save()
         self.t = THEMES.get(theme_name, THEMES["Light"])
-        # Update popup window background and controls
         self.popup_win.configure(bg=self.t["bg"])
         self.hdr.configure(bg=self.t["card"])
         self.lbl_hdr_title.configure(bg=self.t["card"], fg=self.t["fg_dim"])
@@ -287,10 +361,10 @@ class DesktopOverlayWindow:
     def _setup_hotkeys(self) -> None:
         try:
             import keyboard
-            # Ctrl+H toggles popup appear/disappear/reappear
             keyboard.add_hotkey("ctrl+h", lambda: self.root.after(0, self.toggle_assistant))
-            if self.config.hotkey_summon.lower() != "ctrl+h":
-                keyboard.add_hotkey(self.config.hotkey_summon, lambda: self.root.after(0, self.toggle_assistant))
+            keyboard.add_hotkey("ctrl+shift+v", lambda: self.root.after(0, self.handle_auto_paste))
+            keyboard.add_hotkey("ctrl+shift+g", lambda: self.root.after(0, self.toggle_ghost_mode))
+            keyboard.add_hotkey("f1", lambda: self.root.after(0, self.toggle_boss_key))
             keyboard.add_hotkey(self.config.hotkey_clean_clipboard, self.quick_clean_clipboard)
             keyboard.add_hotkey(self.config.hotkey_next_block, self.editor_view.type_next_now)
         except Exception as e:
@@ -308,22 +382,25 @@ class DesktopOverlayWindow:
         self.root.after(0, self._do_summon)
 
     def _do_summon(self) -> None:
-        app_ctx = self.context_engine.collect(self.root)
         self.open_mode("expanded")
         self.popup_win.deiconify()
         self.popup_win.lift()
         if self.is_recessed:
             self.toggle_recess()
-        self.expanded_view.update_context_badge(app_ctx)
         self.expanded_view.focus_input()
 
     def open_mode(self, mode: str) -> None:
-        for v in (self.expanded_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
+        for v in (self.expanded_view, self.history_view, self.sandbox_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
             v.pack_forget()
             
         if mode == "expanded":
             self.expanded_view.pack(fill=tk.BOTH, expand=True)
             self.expanded_view.focus_input()
+        elif mode == "history":
+            self.history_view.pack(fill=tk.BOTH, expand=True)
+            self.history_view.refresh()
+        elif mode == "sandbox":
+            self.sandbox_view.pack(fill=tk.BOTH, expand=True)
         elif mode == "agent":
             self.agent_view.pack(fill=tk.BOTH, expand=True)
         elif mode == "palette":
@@ -340,7 +417,7 @@ class DesktopOverlayWindow:
             self.editor_view.pack(fill=tk.BOTH, expand=True)
 
     def handle_prompt(self, prompt: str, attach_screen: bool = False) -> None:
-        """Handles streaming prompt request without blinking or hiding the popup window."""
+        """Handles streaming prompt request."""
         self._cancel_stream = False
         images = []
         is_screen_solve = False
@@ -364,19 +441,40 @@ class DesktopOverlayWindow:
             app_ctx = self.context_engine.collect(self.root, include_screen=False)
             
         context_prefix = app_ctx.to_prompt_context()
-        system_prompt = "You are an intelligent desktop assistant. Provide direct, concise, and accurate answers with no fluff."
-        if is_screen_solve:
-            system_prompt = (
-                "You are a direct question answering engine. "
-                "Examine the extracted screen text. If there is a question or MCQ on the screen, "
-                "identify the question and provide ONLY the direct answer/option without lengthy explanations or filler."
-            )
-            
+        system_prompt = (
+            "You are an expert universal desktop problem solver, quiz master, and senior software engineer.\n"
+            "Analyze the text captured from the screen. Detect the question type and provide the optimal structured format:\n\n"
+            "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
+            "   Question: <The question>\n"
+            "   Answer: <Exact Option Letter and Option Text ONLY — e.g., 'B) Paris' or 'Option C: O(n log n)'>\n\n"
+            "2. CODING / PROGRAMMING / ALGORITHM QUESTIONS:\n"
+            "   Problem: <Summary of problem/bug/task>\n"
+            "   Solution Code:\n"
+            "   ```<language>\n"
+            "   <Clean, complete, fully working code solution>\n"
+            "   ```\n"
+            "   Explanation: <1-2 concise bullet points on how it works/complexity>\n\n"
+            "3. MATH / NUMERICAL / CALCULATION QUESTIONS:\n"
+            "   Question: <The mathematical/logical question>\n"
+            "   Formula & Steps: <Key calculation steps>\n"
+            "   Final Answer: <Exact calculated value/result>\n\n"
+            "4. GENERAL / THEORETICAL / CONCEPTUAL QUESTIONS:\n"
+            "   Question: <The question>\n"
+            "   Answer: <Direct, high-yield structured answer without conversational fluff>\n\n"
+            "RULES:\n"
+            "- If MCQ: Output ONLY the correct Option Letter and text under Answer. No unnecessary filler.\n"
+            "- If Coding: Always provide clean, complete, working code in markdown blocks.\n"
+            "- Ignore all unrelated application menus, taskbars, and terminal messages.\n"
+            "- No conversational greetings or filler."
+        )
         full_prompt = f"Desktop Context:\n{context_prefix}\n\nUser Request: {prompt}\nAnswer:" if context_prefix else prompt
         
         import threading
         def _stream():
+            start_t = time.perf_counter()
+            full_out = []
             def on_token(t: str):
+                full_out.append(t)
                 self.root.after(0, lambda: self.expanded_view.append_output_stream(t))
                 
             self.llm.generate_stream(
@@ -386,14 +484,22 @@ class DesktopOverlayWindow:
                 on_token=on_token,
                 cancel_check=lambda: self._cancel_stream
             )
+            duration_ms = int((time.perf_counter() - start_t) * 1000)
             self.root.after(0, lambda: self.expanded_view.set_generating(False))
+            # Save to SQLite history
+            self.history_mgr.add_entry(
+                model=self.config.ollama_model,
+                question_type="Prompt",
+                question_text=prompt,
+                answer_text="".join(full_out),
+                duration_ms=duration_ms
+            )
             
         threading.Thread(target=_stream, daemon=True).start()
 
     def handle_scan_and_solve(self) -> None:
         """One-click automated screen scanning and direct problem solving."""
         self._cancel_stream = False
-        # Step aside to cleanly unblock the desktop for OCR
         self.expanded_view.set_output("")
         self.popup_win.withdraw()
         self.root.update()
@@ -409,7 +515,7 @@ class DesktopOverlayWindow:
         if not ocr_text:
             self.expanded_view.set_output(
                 "⚠️ No readable text was detected on your screen.\n\n"
-                "💡 Please make sure the question or window you want to solve is open and clearly visible on your monitor, then click '📸 Scan & Solve Screen' again."
+                "💡 Please make sure the question or window you want to solve is open and clearly visible on your monitor, then click '📸 Scan Screen' again."
             )
             self.expanded_view.set_generating(False)
             return
@@ -457,7 +563,10 @@ class DesktopOverlayWindow:
         
         import threading
         def _stream_solve():
+            start_t = time.perf_counter()
+            full_out = []
             def on_token(t: str):
+                full_out.append(t)
                 self.root.after(0, lambda: self.expanded_view.append_output_stream(t))
                 
             self.llm.generate_stream(
@@ -467,7 +576,16 @@ class DesktopOverlayWindow:
                 on_token=on_token,
                 cancel_check=lambda: self._cancel_stream
             )
+            duration_ms = int((time.perf_counter() - start_t) * 1000)
             self.root.after(0, lambda: self.expanded_view.set_generating(False))
+            # Save to SQLite history
+            self.history_mgr.add_entry(
+                model=self.config.ollama_model,
+                question_type="Screen Scan",
+                question_text=ocr_text,
+                answer_text="".join(full_out),
+                duration_ms=duration_ms
+            )
             
         threading.Thread(target=_stream_solve, daemon=True).start()
 
@@ -534,7 +652,10 @@ class DesktopOverlayWindow:
         
         import threading
         def _stream_snip():
+            start_t = time.perf_counter()
+            full_out = []
             def on_token(t: str):
+                full_out.append(t)
                 self.root.after(0, lambda: self.expanded_view.append_output_stream(t))
                 
             self.llm.generate_stream(
@@ -543,7 +664,16 @@ class DesktopOverlayWindow:
                 on_token=on_token,
                 cancel_check=lambda: self._cancel_stream
             )
+            duration_ms = int((time.perf_counter() - start_t) * 1000)
             self.root.after(0, lambda: self.expanded_view.set_generating(False))
+            # Save to SQLite history
+            self.history_mgr.add_entry(
+                model=self.config.ollama_model,
+                question_type="Snip & Solve",
+                question_text=ocr_text,
+                answer_text="".join(full_out),
+                duration_ms=duration_ms
+            )
             
         threading.Thread(target=_stream_snip, daemon=True).start()
 
@@ -587,6 +717,10 @@ class DesktopOverlayWindow:
         elif action_id == "block_typer":
             self.open_mode("editor")
             self.editor_view.start_block_typer()
+        elif action_id == "history":
+            self.open_mode("history")
+        elif action_id == "sandbox":
+            self.open_mode("sandbox")
         elif action_id == "settings":
             self.open_mode("settings")
         elif action_id == "diagnostics":

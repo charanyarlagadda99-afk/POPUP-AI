@@ -1,4 +1,4 @@
-"""Expanded Conversational Assistant View with Stop Generation, Snipping Tool, and Settings."""
+"""Expanded Conversational Assistant View with Code Sandbox, Auto-Paste, Ghost Mode, and History."""
 
 from __future__ import annotations
 import tkinter as tk
@@ -6,9 +6,10 @@ from tkinter import ttk
 from typing import Callable, Optional
 from desktop_overlay.config import THEMES, OverlayConfig
 from desktop_overlay.context.context_engine import ApplicationContext
+from desktop_overlay.sandbox.code_runner import CodeSandboxEngine
 
 class ExpandedAssistantView(tk.Frame):
-    """Full desktop AI assistant with live context tags, streaming output, Snipping Question Solver, stop button, and settings."""
+    """Full desktop AI assistant with live context tags, streaming output, code runner sandbox, auto-paste, and history."""
     
     def __init__(
         self,
@@ -19,6 +20,11 @@ class ExpandedAssistantView(tk.Frame):
         on_snip_solve: Callable[[], None],
         on_stop: Callable[[], None],
         on_run_agent: Callable[[str], None],
+        on_auto_paste: Callable[[], None],
+        on_run_sandbox: Callable[[str], None],
+        on_toggle_ghost: Callable[[], None],
+        on_open_history: Callable[[], None],
+        on_open_sandbox: Callable[[], None],
         on_open_palette: Callable[[], None],
         on_open_settings: Callable[[], None],
         on_open_permissions: Callable[[], None],
@@ -34,6 +40,11 @@ class ExpandedAssistantView(tk.Frame):
         self.on_snip_solve = on_snip_solve
         self.on_stop = on_stop
         self.on_run_agent = on_run_agent
+        self.on_auto_paste = on_auto_paste
+        self.on_run_sandbox = on_run_sandbox
+        self.on_toggle_ghost = on_toggle_ghost
+        self.on_open_history = on_open_history
+        self.on_open_sandbox = on_open_sandbox
         self.on_open_palette = on_open_palette
         self.on_open_settings = on_open_settings
         self.on_open_permissions = on_open_permissions
@@ -64,27 +75,15 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 8),
             cursor="hand2"
         )
-        self.btn_refresh.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_refresh.pack(side=tk.LEFT, padx=(0, 6))
         
-        # Active Context Badge
-        self.lbl_context_badge = tk.Label(
-            top_bar,
-            text="📍 Context: Desktop",
-            bg=self.t["card"],
-            fg=self.t["accent"],
-            font=("Segoe UI", 8, "bold"),
-            padx=8,
-            pady=3,
-            bd=0
-        )
-        self.lbl_context_badge.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        # Quick Navigation Buttons
-        tk.Button(top_bar, text="⚙️ Settings", command=self.on_open_settings, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=2)
-        tk.Button(top_bar, text="🔍 Actions", command=self.on_open_palette, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=2)
-        tk.Button(top_bar, text="📝 Editor", command=self.on_open_editor, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=2)
-        tk.Button(top_bar, text="🔒 Privacy", command=self.on_open_permissions, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=2)
-        tk.Button(top_bar, text="📊 Info", command=self.on_open_diagnostics, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=2)
+        # Quick Navigation Buttons Bar (Pill style)
+        tk.Button(top_bar, text="⚙️ Settings", command=self.on_open_settings, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
+        tk.Button(top_bar, text="🔍 Actions", command=self.on_open_palette, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
+        tk.Button(top_bar, text="📜 History", command=self.on_open_history, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8, "bold"), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
+        tk.Button(top_bar, text="🧩 Sandbox", command=self.on_open_sandbox, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8, "bold"), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
+        tk.Button(top_bar, text="📝 Typer", command=self.on_open_editor, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
+        tk.Button(top_bar, text="🪟 Ghost", command=self.on_toggle_ghost, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         
         # 2. INPUT AREA & FIXED ACTION BAR (Packed at BOTTOM first to guarantee visibility)
         f_in = tk.Frame(self, bg=self.t["card"], bd=1, relief=tk.FLAT)
@@ -127,10 +126,10 @@ class ExpandedAssistantView(tk.Frame):
         self.btn_bar = tk.Frame(f_in, bg=self.t["card"], padx=6, pady=5)
         self.btn_bar.pack(fill=tk.X)
         
-        # 🎯 SNIP & SOLVE QUESTION (Drag box directly over question)
+        # 🎯 SNIP & SOLVE QUESTION
         self.btn_snip = tk.Button(
             self.btn_bar,
-            text="🎯 Snip & Solve Question",
+            text="🎯 Snip & Solve",
             command=self._submit_snip_solve,
             bg="#00AA44",
             fg="#FFFFFF",
@@ -140,12 +139,12 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
         )
-        self.btn_snip.pack(side=tk.LEFT, padx=(0, 6))
+        self.btn_snip.pack(side=tk.LEFT, padx=(0, 5))
         
         # 📸 FULL SCREEN SCAN & SOLVE
         self.btn_scan = tk.Button(
             self.btn_bar,
-            text="📸 Scan Full Screen",
+            text="📸 Scan Screen",
             command=self._submit_scan_solve,
             bg="#268BD2",
             fg="#FFFFFF",
@@ -155,12 +154,13 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
         )
-        self.btn_scan.pack(side=tk.LEFT, padx=(0, 6))
+        self.btn_scan.pack(side=tk.LEFT, padx=(0, 5))
         
-        self.btn_agent = tk.Button(
+        # ⚡ AUTO-PASTE SOLUTION (Ctrl+Shift+V)
+        self.btn_auto_paste = tk.Button(
             self.btn_bar,
-            text="⚡ Run Agent",
-            command=self._submit_agent,
+            text="⚡ Auto-Paste (Ctrl+Shift+V)",
+            command=self.on_auto_paste,
             bg=self.t["btn"],
             fg=self.t["btn_fg"],
             bd=0,
@@ -169,7 +169,7 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
         )
-        self.btn_agent.pack(side=tk.LEFT)
+        self.btn_auto_paste.pack(side=tk.LEFT)
         
         # Stop Generation Button (Hidden until AI starts generating)
         self.btn_stop = tk.Button(
@@ -208,8 +208,22 @@ class ExpandedAssistantView(tk.Frame):
         hdr_out.pack(fill=tk.X)
         tk.Label(hdr_out, text="✦ AI Response & Solutions", bg=self.t["card"], fg=self.t["success"], font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
         
-        self.btn_copy_resp = tk.Button(hdr_out, text="📋 Copy Response", command=self.copy_output, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=1, font=("Segoe UI", 8))
-        self.btn_copy_resp.pack(side=tk.RIGHT)
+        self.btn_copy_resp = tk.Button(hdr_out, text="📋 Copy", command=self.copy_output, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=1, font=("Segoe UI", 8))
+        self.btn_copy_resp.pack(side=tk.RIGHT, padx=(2, 0))
+        
+        self.btn_run_sandbox_inline = tk.Button(
+            hdr_out,
+            text="▶ Run in Sandbox",
+            command=self._run_code_in_sandbox,
+            bg="#00AA44",
+            fg="#FFFFFF",
+            bd=0,
+            padx=8,
+            pady=1,
+            font=("Segoe UI", 8, "bold"),
+            cursor="hand2"
+        )
+        self.btn_run_sandbox_inline.pack(side=tk.RIGHT, padx=4)
         
         self.txt_output = tk.Text(
             f_out,
@@ -232,22 +246,14 @@ class ExpandedAssistantView(tk.Frame):
             self.btn_stop.pack(side=tk.RIGHT)
             self.btn_snip.config(state=tk.DISABLED)
             self.btn_scan.config(state=tk.DISABLED)
-            self.btn_agent.config(state=tk.DISABLED)
+            self.btn_auto_paste.config(state=tk.DISABLED)
         else:
             self.btn_stop.pack_forget()
             self.btn_send.pack(side=tk.RIGHT)
             self.btn_send.config(text="🚀 Send Prompt", state=tk.NORMAL)
             self.btn_snip.config(state=tk.NORMAL)
             self.btn_scan.config(state=tk.NORMAL)
-            self.btn_agent.config(state=tk.NORMAL)
-
-    def update_context_badge(self, app_ctx: ApplicationContext) -> None:
-        title = app_ctx.window.title
-        proc = app_ctx.window.process_name
-        if len(title) > 30:
-            title = title[:27] + "..."
-        badge_text = f"📍 {proc} : {title}" if proc else "📍 Desktop"
-        self.lbl_context_badge.config(text=badge_text)
+            self.btn_auto_paste.config(state=tk.NORMAL)
 
     def set_output(self, text: str) -> None:
         self.txt_output.delete("1.0", tk.END)
@@ -258,16 +264,24 @@ class ExpandedAssistantView(tk.Frame):
         self.txt_output.insert(tk.END, token)
         self.txt_output.see(tk.END)
 
+    def get_output_text(self) -> str:
+        return self.txt_output.get("1.0", tk.END).strip()
+
     def copy_output(self) -> None:
         try:
-            txt = self.txt_output.get("1.0", tk.END).rstrip("\n")
+            txt = self.get_output_text()
             if txt:
                 self.clipboard_clear()
                 self.clipboard_append(txt)
                 self.btn_copy_resp.config(text="✓ Copied!")
-                self.after(1500, lambda: self.btn_copy_resp.config(text="📋 Copy Response"))
+                self.after(1500, lambda: self.btn_copy_resp.config(text="📋 Copy"))
         except Exception:
             pass
+
+    def _run_code_in_sandbox(self) -> None:
+        txt = self.get_output_text()
+        clean_code = CodeSandboxEngine.extract_clean_code_or_answer(txt)
+        self.on_run_sandbox(clean_code)
 
     def focus_input(self) -> None:
         self.txt_input.focus_set()
@@ -291,12 +305,6 @@ class ExpandedAssistantView(tk.Frame):
         self.set_output("")
         self.set_generating(True)
         self.on_scan_solve()
-
-    def _submit_agent(self) -> None:
-        if self.is_generating: return
-        prompt = self.txt_input.get("1.0", tk.END).strip()
-        if not prompt: return
-        self.on_run_agent(prompt)
 
     def _on_model_change(self, model: str) -> None:
         self.config.ollama_model = model
