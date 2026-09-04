@@ -33,6 +33,7 @@ class LLMProvider:
         prompt: str,
         system_prompt: str = "You are a helpful, capable desktop AI assistant. Provide concise, direct answers.",
         images: Optional[list[str]] = None,
+        stop: Optional[list[str]] = None,
         on_token: Optional[Callable[[str], None]] = None,
         cancel_check: Optional[Callable[[], bool]] = None
     ) -> str:
@@ -43,6 +44,7 @@ class LLMProvider:
             return self._generate_stream_openai_compatible(
                 prompt=prompt,
                 system_prompt=system_prompt,
+                stop=stop,
                 on_token=on_token,
                 cancel_check=cancel_check
             )
@@ -51,6 +53,7 @@ class LLMProvider:
             prompt=prompt,
             system_prompt=system_prompt,
             images=images,
+            stop=stop,
             on_token=on_token,
             cancel_check=cancel_check
         )
@@ -60,6 +63,7 @@ class LLMProvider:
         prompt: str,
         system_prompt: str,
         images: Optional[list[str]] = None,
+        stop: Optional[list[str]] = None,
         on_token: Optional[Callable[[str], None]] = None,
         cancel_check: Optional[Callable[[], bool]] = None
     ) -> str:
@@ -73,15 +77,19 @@ class LLMProvider:
             url = raw_url
         model = self.config.ollama_model
         
+        options = {
+            "temperature": self.config.temperature,
+            "num_predict": self.config.max_tokens
+        }
+        if stop:
+            options["stop"] = stop
+            
         payload = {
             "model": model,
             "prompt": prompt,
             "system": system_prompt,
             "stream": True,
-            "options": {
-                "temperature": self.config.temperature,
-                "num_predict": self.config.max_tokens
-            }
+            "options": options
         }
         model_lower = model.lower()
         supports_vision = any(v in model_lower for v in ["vision", "llava", "moondream", "minicpm", "bakllava"])
@@ -135,6 +143,7 @@ class LLMProvider:
         self,
         prompt: str,
         system_prompt: str,
+        stop: Optional[list[str]] = None,
         on_token: Optional[Callable[[str], None]] = None,
         cancel_check: Optional[Callable[[], bool]] = None
     ) -> str:
@@ -157,6 +166,8 @@ class LLMProvider:
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens
         }
+        if stop:
+            payload["stop"] = stop
         
         headers = {
             "Content-Type": "application/json",

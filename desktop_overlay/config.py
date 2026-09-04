@@ -52,7 +52,7 @@ class OverlayConfig:
     provider_models: dict[str, str] = field(default_factory=dict)
     
     streaming: bool = True
-    temperature: float = 0.7
+    temperature: float = 0.1
     max_tokens: int = 1500
 
     def get_api_key(self, provider: str) -> str:

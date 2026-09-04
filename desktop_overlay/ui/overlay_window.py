@@ -31,21 +31,19 @@ from desktop_overlay.ui.sandbox_view import SandboxView
 from desktop_overlay.ui.snipper import ScreenSnipper
 
 SOLVER_SYSTEM_PROMPT = (
-    "You are an ultra-intelligent, precise AI desktop solver and problem solver.\n"
-    "CRITICAL INSTRUCTIONS ON ANSWERING FORMAT:\n"
-    "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
-    "   - If the input is an MCQ or test question, identify the exact correct option immediately.\n"
-    "   - Format the very first line as:\n"
-    "     **Correct Option: <Option Letter>) <Option Text>**\n"
-    "   - Follow with a concise 1-2 sentence explanation of why it is correct.\n"
-    "   - CRITICAL RULE: NEVER output code, Python scripts, or implementation code for multiple-choice questions unless the question explicitly asks to write a program or function.\n\n"
-    "2. CODING & PROGRAMMING REQUESTS:\n"
-    "   - If the input asks to write, debug, or implement code, provide the full, clean, working code in markdown code blocks with the correct language identifier.\n"
-    "   - Add brief explanations and usage instructions.\n\n"
-    "3. MATH & CALCULATION QUESTIONS:\n"
-    "   - Show the key formula/steps concisely and state the final computed answer clearly.\n\n"
-    "4. GENERAL QUESTIONS & CONCEPTUAL EXPLANATIONS:\n"
-    "   - Provide direct, structured, accurate, and high-yield answers without unnecessary fluff."
+    "You are an ultra-fast, highly intelligent desktop AI problem solver and assistant.\n"
+    "Carefully identify the user's intent and follow these exact output rules:\n\n"
+    "1. MULTIPLE CHOICE QUESTIONS (MCQs / Test Questions with options A, B, C, D or choices):\n"
+    "   - Provide ONLY the direct correct option on a single line.\n"
+    "   - Format: **Answer: <Letter>) <Option Text>**\n"
+    "   - Absolutely NO explanations, NO reasoning, NO fluff, and NO code scripts.\n"
+    "   - Example: **Answer: B) Stack**\n\n"
+    "2. CODING & PROGRAMMING REQUESTS (asks to write, solve, or implement code / algorithms / DSA in Python, C++, Java, etc.):\n"
+    "   - Provide ONLY the clean, working code in a markdown code block with the correct language tag.\n"
+    "   - Absolutely NO conversational preamble or fluff before the code.\n\n"
+    "3. GENERAL & CONCEPTUAL QUESTIONS (explanations, definitions, comparisons):\n"
+    "   - Provide a direct, clear, structured, and informative answer like ChatGPT.\n\n"
+    "4. STRICT RULE: Answer ONLY the given question. NEVER invent, generate, or hallucinate subsequent questions, questionnaires, or tests."
 )
 
 class DesktopOverlayWindow:
@@ -574,6 +572,7 @@ class DesktopOverlayWindow:
                 full_prompt,
                 system_prompt=system_prompt,
                 images=images if images else None,
+                stop=["\nQuestion", "\n\nQuestion", "\nQuestion:", "\n\nQuestion:", "Question II", "Question 2"],
                 on_token=on_token,
                 cancel_check=lambda: self._cancel_stream
             )
@@ -591,21 +590,43 @@ class DesktopOverlayWindow:
         threading.Thread(target=_stream_solve, daemon=True).start()
 
     def start_snip_and_solve(self) -> None:
-        """Opens interactive green box snipper so user can select their exact question."""
+        """Opens crystal-clear interactive green box snipper so user can select their exact question."""
         self._cancel_stream = False
-        ScreenSnipper(self.root, on_snip_completed=self.handle_region_solve)
+        # Step aside popup window during snipping so background is 100% visible
+        self.popup_win.withdraw()
+        self.root.update()
+        ScreenSnipper(
+            self.root,
+            on_snip_completed=self.handle_region_solve,
+            on_cancel=self._on_snip_cancel
+        )
 
-    def handle_region_solve(self, bbox: tuple) -> None:
-        """Extracts OCR text from selected screen rectangle and solves the question directly."""
+    def _on_snip_cancel(self) -> None:
+        """Restores the popup window if snipping is cancelled."""
+        self.popup_win.deiconify()
+        self.popup_win.lift()
+
+    def handle_region_solve(self, img_or_bbox) -> None:
+        """Extracts OCR text from selected screen crop/rectangle and solves the question directly."""
         self._cancel_stream = False
+        self.popup_win.deiconify()
+        self.popup_win.lift()
         self.expanded_view.set_output("🎯 Analyzing selected question region...\n")
         self.expanded_view.set_generating(True)
         
-        screen_ctx = self.context_engine.screen_engine.capture_region(bbox, run_ocr=True)
+        images = []
+        if hasattr(img_or_bbox, 'save') and hasattr(img_or_bbox, 'size'):
+            # Direct PIL Image from crystal-clear ScreenSnipper
+            screen_ctx = self.context_engine.screen_engine._image_to_context(img_or_bbox, run_ocr=True)
+            if screen_ctx and screen_ctx.image_base64:
+                images.append(screen_ctx.image_base64)
+        else:
+            screen_ctx = self.context_engine.screen_engine.capture_region(img_or_bbox, run_ocr=True)
+            
         ocr_text = screen_ctx.ocr_text.strip() if screen_ctx else ""
         
         if not ocr_text:
-            self.expanded_view.set_output("⚠️ No readable text detected in the selected box. Please drag a slightly larger box around the question.")
+            self.expanded_view.set_output("⚠️ No readable text detected in the selected box. Please try dragging a box around the question.")
             self.expanded_view.set_generating(False)
             return
             
@@ -626,6 +647,8 @@ class DesktopOverlayWindow:
             self.llm.generate_stream(
                 full_prompt,
                 system_prompt=system_prompt,
+                images=images if images else None,
+                stop=["\nQuestion", "\n\nQuestion", "\nQuestion:", "\n\nQuestion:", "Question II", "Question 2"],
                 on_token=on_token,
                 cancel_check=lambda: self._cancel_stream
             )
