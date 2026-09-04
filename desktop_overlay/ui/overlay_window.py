@@ -422,22 +422,37 @@ class DesktopOverlayWindow:
             images.append(app_ctx.screen.image_base64)
             
         system_prompt = (
-            "You are an ultra-direct Question and MCQ answering engine.\n"
-            "Analyze the provided screen text, find the primary question or multiple-choice question (MCQ), and output strictly:\n\n"
-            "Question: <The exact question found on screen>\n"
-            "Answer: <Direct Option and Answer ONLY>\n\n"
+            "You are an expert universal desktop problem solver, quiz master, and senior software engineer.\n"
+            "Analyze the text captured from the screen. Detect the question type and provide the optimal structured format:\n\n"
+            "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
+            "   Question: <The question>\n"
+            "   Answer: <Exact Option Letter and Option Text ONLY — e.g., 'B) Paris' or 'Option C: O(n log n)'>\n\n"
+            "2. CODING / PROGRAMMING / ALGORITHM QUESTIONS:\n"
+            "   Problem: <Summary of problem/bug/task>\n"
+            "   Solution Code:\n"
+            "   ```<language>\n"
+            "   <Clean, complete, fully working code solution>\n"
+            "   ```\n"
+            "   Explanation: <1-2 concise bullet points on how it works/complexity>\n\n"
+            "3. MATH / NUMERICAL / CALCULATION QUESTIONS:\n"
+            "   Question: <The mathematical/logical question>\n"
+            "   Formula & Steps: <Key calculation steps>\n"
+            "   Final Answer: <Exact calculated value/result>\n\n"
+            "4. GENERAL / THEORETICAL / CONCEPTUAL QUESTIONS:\n"
+            "   Question: <The question>\n"
+            "   Answer: <Direct, high-yield structured answer without conversational fluff>\n\n"
             "RULES:\n"
-            "- If MCQ: Give ONLY the correct Option Letter and text (e.g. 'Answer: B) Paris' or 'Answer: Option A'). No explanation.\n"
-            "- If open question: Give ONLY the direct concise answer. No explanation.\n"
-            "- Ignore any terminal commands, file paths, or IDE menus.\n"
-            "- Do not write reasoning or conversational preamble."
+            "- If MCQ: Output ONLY the correct Option Letter and text under Answer. No unnecessary filler.\n"
+            "- If Coding: Always provide clean, complete, working code in markdown blocks.\n"
+            "- Ignore all unrelated application menus, taskbars, and terminal messages.\n"
+            "- No conversational greetings or filler."
         )
         full_prompt = (
             f"Screen Text:\n"
             f"----------------------------------------\n"
             f"{ocr_text}\n"
             f"----------------------------------------\n\n"
-            f"TASK: Find the question in the screen text above and provide the direct answer.\n"
+            f"TASK: Detect the question or problem above and provide the direct, complete solution.\n"
         )
         
         import threading
@@ -484,21 +499,37 @@ class DesktopOverlayWindow:
         self.expanded_view.set_output(f"✓ Question captured ({ocr_len} characters).\n🧠 Solving with {self.config.ollama_model}...\n\n")
         
         system_prompt = (
-            "You are an ultra-direct Question and MCQ answering engine.\n"
-            "Analyze the selected question text and output strictly:\n\n"
-            "Question: <The question>\n"
-            "Answer: <Direct Option and Answer ONLY>\n\n"
+            "You are an expert universal desktop problem solver, quiz master, and senior software engineer.\n"
+            "Analyze the text captured from the screen. Detect the question type and provide the optimal structured format:\n\n"
+            "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
+            "   Question: <The question>\n"
+            "   Answer: <Exact Option Letter and Option Text ONLY — e.g., 'B) Paris' or 'Option C: O(n log n)'>\n\n"
+            "2. CODING / PROGRAMMING / ALGORITHM QUESTIONS:\n"
+            "   Problem: <Summary of problem/bug/task>\n"
+            "   Solution Code:\n"
+            "   ```<language>\n"
+            "   <Clean, complete, fully working code solution>\n"
+            "   ```\n"
+            "   Explanation: <1-2 concise bullet points on how it works/complexity>\n\n"
+            "3. MATH / NUMERICAL / CALCULATION QUESTIONS:\n"
+            "   Question: <The mathematical/logical question>\n"
+            "   Formula & Steps: <Key calculation steps>\n"
+            "   Final Answer: <Exact calculated value/result>\n\n"
+            "4. GENERAL / THEORETICAL / CONCEPTUAL QUESTIONS:\n"
+            "   Question: <The question>\n"
+            "   Answer: <Direct, high-yield structured answer without conversational fluff>\n\n"
             "RULES:\n"
-            "- If MCQ: Give ONLY the correct Option Letter and text (e.g. 'Answer: B) Paris' or 'Answer: Option A'). No explanation.\n"
-            "- If open question: Give ONLY the direct concise answer. No explanation.\n"
-            "- Do not write reasoning or conversational preamble."
+            "- If MCQ: Output ONLY the correct Option Letter and text under Answer. No unnecessary filler.\n"
+            "- If Coding: Always provide clean, complete, working code in markdown blocks.\n"
+            "- Ignore all unrelated application menus, taskbars, and terminal messages.\n"
+            "- No conversational greetings or filler."
         )
         full_prompt = (
             f"Question Text:\n"
             f"----------------------------------------\n"
             f"{ocr_text}\n"
             f"----------------------------------------\n\n"
-            f"TASK: Provide the direct answer to the question above.\n"
+            f"TASK: Provide the direct, complete answer or working code to the question above.\n"
         )
         
         import threading
