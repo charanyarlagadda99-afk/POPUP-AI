@@ -1,4 +1,4 @@
-"""Master Floating Overlay Window Manager with Code Sandbox, Auto-Paste, History, Ghost Mode, and Direct OCR Solving."""
+"""Master Floating Overlay Window Manager with Auto-Paste, History, Ghost Mode, and Direct OCR Solving."""
 
 from __future__ import annotations
 import sys
@@ -16,7 +16,7 @@ from desktop_overlay.context.context_engine import ContextEngine, ApplicationCon
 from desktop_overlay.agent.llm_provider import LLMProvider
 from desktop_overlay.agent.engine import AgentEngine
 from desktop_overlay.history.history_manager import HistoryManager
-from desktop_overlay.sandbox.code_runner import CodeSandboxEngine
+from desktop_overlay.agent.tools.text_clean_tool import extract_clean_code_or_answer
 
 from desktop_overlay.ui.compact_mode import CompactLauncher
 from desktop_overlay.ui.expanded_mode import ExpandedAssistantView
@@ -27,27 +27,35 @@ from desktop_overlay.ui.diagnostics_ui import DiagnosticsPanel
 from desktop_overlay.ui.editor_view import EditorToolsView
 from desktop_overlay.ui.settings_ui import SettingsPanel
 from desktop_overlay.ui.history_view import HistoryView
-from desktop_overlay.ui.sandbox_view import SandboxView
 from desktop_overlay.ui.snipper import ScreenSnipper
 
+CHAT_SYSTEM_PROMPT = (
+    "You are an intelligent, helpful, and highly capable desktop AI assistant, like ChatGPT.\n"
+    "Answer the user's questions clearly, accurately, and comprehensively.\n"
+    "- For general questions, explanations, and concepts: provide clear, insightful, well-structured answers.\n"
+    "- For coding questions: provide clean, correct, well-explained code with markdown code blocks.\n"
+    "- For direct questions: answer directly and helpfully.\n"
+    "- Maintain a natural, polite, and intelligent tone."
+)
+
 SOLVER_SYSTEM_PROMPT = (
-    "You are an ultra-fast, highly intelligent desktop AI problem solver and assistant.\n"
-    "Carefully identify the user's intent and follow these exact output rules:\n\n"
-    "1. MULTIPLE CHOICE QUESTIONS (MCQs / Test Questions with options A, B, C, D or choices):\n"
-    "   - Provide ONLY the direct correct option on a single line.\n"
-    "   - Format: **Answer: <Letter>) <Option Text>**\n"
-    "   - Absolutely NO explanations, NO reasoning, NO fluff, and NO code scripts.\n"
-    "   - Example: **Answer: B) Stack**\n\n"
-    "2. CODING & PROGRAMMING REQUESTS (asks to write, solve, or implement code / algorithms / DSA in Python, C++, Java, etc.):\n"
-    "   - Provide ONLY the clean, working code in a markdown code block with the correct language tag.\n"
-    "   - Absolutely NO conversational preamble or fluff before the code.\n\n"
-    "3. GENERAL & CONCEPTUAL QUESTIONS (explanations, definitions, comparisons):\n"
-    "   - Provide a direct, clear, structured, and informative answer like ChatGPT.\n\n"
-    "4. STRICT RULE: Answer ONLY the given question. NEVER invent, generate, or hallucinate subsequent questions, questionnaires, or tests."
+    "You are an expert, precise problem solver and AI assistant.\n"
+    "Analyze the provided question or screen content and respond according to the question type:\n\n"
+    "1. MULTIPLE CHOICE QUESTIONS (Contains options like A, B, C, D):\n"
+    "   - State the correct answer directly and concisely.\n"
+    "   - Format: **Answer: <Option Letter>) <Option Text>**\n"
+    "   - Do not include unnecessary fluff or filler.\n\n"
+    "2. CODING & ALGORITHMIC PROBLEMS (asks to write, solve, or implement code / algorithms / DSA):\n"
+    "   - Provide the complete, working code solution in a markdown code block.\n"
+    "   - Keep explanations concise.\n\n"
+    "3. OPEN-ENDED & GENERAL QUESTIONS (definitions, explanations, theory, descriptive questions):\n"
+    "   - Provide a clear, comprehensive, and well-structured answer like ChatGPT.\n"
+    "   - DO NOT fabricate MCQ options (A, B, C, D) if none were provided in the question.\n\n"
+    "4. STRICT RULE: Answer only the question provided. Do not generate fake subsequent questions or repeat the prompt."
 )
 
 class DesktopOverlayWindow:
-    """Universal Desktop AI Overlay Window with permanent floating dot, Sandbox, Auto-Paste, Ghost Mode, and History."""
+    """Universal Desktop AI Overlay Window with permanent floating dot, Auto-Paste, Ghost Mode, and History."""
     
     def __init__(self, root: tk.Tk, config: Optional[OverlayConfig] = None):
         self.root = root
@@ -204,10 +212,8 @@ class DesktopOverlayWindow:
             on_stop=self.cancel_generation,
             on_run_agent=self.handle_agent_task,
             on_auto_paste=self.handle_auto_paste,
-            on_run_sandbox=self.run_in_sandbox,
             on_toggle_ghost=self.toggle_ghost_mode,
             on_open_history=lambda: self.open_mode("history"),
-            on_open_sandbox=lambda: self.open_mode("sandbox"),
             on_open_palette=lambda: self.open_mode("palette"),
             on_open_settings=lambda: self.open_mode("settings"),
             on_open_permissions=lambda: self.open_mode("permissions"),
@@ -221,13 +227,6 @@ class DesktopOverlayWindow:
         self.history_view = HistoryView(
             self.view_frame,
             history_mgr=self.history_mgr,
-            on_back=lambda: self.open_mode("expanded"),
-            theme_name=theme_name
-        )
-        
-        # 3. Sandbox View
-        self.sandbox_view = SandboxView(
-            self.view_frame,
             on_back=lambda: self.open_mode("expanded"),
             theme_name=theme_name
         )
@@ -358,7 +357,7 @@ class DesktopOverlayWindow:
         """Instantly auto-pastes the clean solution or code into the user's active window."""
         text = self.expanded_view.get_output_text()
         if not text: return
-        clean_text = CodeSandboxEngine.extract_clean_code_or_answer(text)
+        clean_text = extract_clean_code_or_answer(text)
         
         # Step aside, focus target window, and inject paste event
         self.popup_win.withdraw()
@@ -368,12 +367,6 @@ class DesktopOverlayWindow:
         time.sleep(0.10)
         self.popup_win.deiconify()
         self.popup_win.lift()
-
-    def run_in_sandbox(self, code_text: str) -> None:
-        """Loads code into Sandbox and executes it."""
-        self.open_mode("sandbox")
-        self.sandbox_view.load_code(code_text)
-        self.sandbox_view.run_code()
 
     def apply_opacity(self, opacity: float) -> None:
         try:
@@ -406,7 +399,7 @@ class DesktopOverlayWindow:
         
         # Destroy and recreate subviews with new theme
         current_mode = self._current_mode if hasattr(self, "_current_mode") else "expanded"
-        for v in (self.expanded_view, self.history_view, self.sandbox_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
+        for v in (self.expanded_view, self.history_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
             v.destroy()
         self._create_subviews(theme_name)
         self.open_mode(current_mode)
@@ -455,7 +448,7 @@ class DesktopOverlayWindow:
 
     def open_mode(self, mode: str) -> None:
         self._current_mode = mode
-        for v in (self.expanded_view, self.history_view, self.sandbox_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
+        for v in (self.expanded_view, self.history_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
             v.pack_forget()
             
         if mode == "expanded":
@@ -464,8 +457,6 @@ class DesktopOverlayWindow:
         elif mode == "history":
             self.history_view.pack(fill=tk.BOTH, expand=True)
             self.history_view.refresh()
-        elif mode == "sandbox":
-            self.sandbox_view.pack(fill=tk.BOTH, expand=True)
         elif mode == "agent":
             self.agent_view.pack(fill=tk.BOTH, expand=True)
         elif mode == "palette":
@@ -502,7 +493,7 @@ class DesktopOverlayWindow:
         else:
             full_prompt = prompt
             
-        system_prompt = SOLVER_SYSTEM_PROMPT
+        system_prompt = CHAT_SYSTEM_PROMPT
         
         import threading
         def _stream():
@@ -707,8 +698,6 @@ class DesktopOverlayWindow:
             self.editor_view.start_block_typer()
         elif action_id == "history":
             self.open_mode("history")
-        elif action_id == "sandbox":
-            self.open_mode("sandbox")
         elif action_id == "settings":
             self.open_mode("settings")
         elif action_id == "diagnostics":

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License" />
 </p>
 
-**Pop-up AI** is a lightweight, stealthy, and powerful floating AI overlay assistant designed for Windows. It features instantaneous screen OCR problem solving, in-app Python code execution, automated IDE solution injection, SQLite solution archiving, and click-through ghost mode.
+**Pop-up AI** is a lightweight, stealthy, and powerful floating AI overlay assistant designed for Windows. It features instantaneous screen OCR problem solving, conversational ChatGPT-style intelligence, automated IDE solution injection, SQLite solution archiving, and click-through ghost mode.
 
 ---
 
@@ -23,23 +23,19 @@
 ### ⚡ 3. Instant Solution Auto-Paste (`Ctrl + Shift + V`)
 - Automatically switches focus back to your active code editor (VS Code, Cursor, LeetCode, Terminal) and **injects the clean solution or code** directly at your cursor location.
 
-### 🧩 4. In-App Code Runner Sandbox (`▶ Run in Sandbox`)
-- Directly execute and test generated Python algorithms and data structures inside an isolated sandbox subprocess.
-- Live terminal console showing `stdout`, `stderr`, execution duration (`ms`), and return code status.
-
-### 📜 5. Searchable Solution History & Markdown Export (`📜 History`)
+### 📜 4. Searchable Solution History & Markdown Export (`📜 History`)
 - Every scanned question, MCQ, code solution, timestamp, and active model is persisted in a local SQLite database (`~/.universal_overlay/history.db`).
 - Live search bar and one-click **`📥 Export to Markdown`** to save your exam/coding prep session into structured `.md` notes.
 
-### 🪟 6. Click-Through "Ghost Mode" (`Ctrl + Shift + G`)
+### 🪟 5. Click-Through "Ghost Mode" (`Ctrl + Shift + G`)
 - Native Windows `WS_EX_TRANSPARENT` click-through overlay. The assistant remains visible on top with custom opacity, while all mouse clicks pass directly through to windows underneath.
 
-### 🕶️ 7. Emergency "Boss Key" (`F1`)
+### 🕶️ 6. Emergency "Boss Key" (`F1`)
 - Instantly vanishes the entire widget, floating dot, and taskbar entry with 0ms delay. Pressing `F1` again restores it immediately.
 
-### 🤖 8. Dynamic Ollama Model Auto-Discovery
+### 🤖 7. Dynamic Ollama & Cloud Model Support
 - Automatically scans your local Ollama instance (`http://localhost:11434/api/tags`) on launch.
-- Seamlessly switch between **Qwen 3.6**, **Phi-3**, **LLaMA 3.2**, **LLaVA**, **Mistral**, or any model installed on your PC.
+- Seamlessly switch between **Grok**, **Groq**, **DeepSeek**, **OpenAI**, or local models like **Qwen**, **Phi-3**, **LLaMA 3.2**, or any model installed on your PC.
 
 ---
 
@@ -119,15 +115,12 @@ POPUP-AI/
 │   │   └── active_window.py         # Windows foreground process tracker
 │   ├── history/
 │   │   └── history_manager.py       # SQLite database archive & Markdown exporter
-│   ├── sandbox/
-│   │   └── code_runner.py           # In-app Python execution engine
 │   ├── platform_layer/
 │   │   └── win32_api.py             # Ctypes Win32 bindings (Ghost mode, Auto-paste)
 │   └── ui/
 │       ├── overlay_window.py        # Master window manager (Pop-up AI)
 │       ├── expanded_mode.py         # Main assistant chat & toolbar
 │       ├── snipper.py               # Interactive green box question selector
-│       ├── sandbox_view.py          # Code sandbox runner UI
 │       ├── history_view.py          # Searchable solution history UI
 │       ├── editor_view.py           # Sequential block typer
 │       ├── settings_ui.py           # Opacity & appearance settings

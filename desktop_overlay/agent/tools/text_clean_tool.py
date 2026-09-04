@@ -3,7 +3,8 @@
 from __future__ import annotations
 import sys
 from pathlib import Path
-from typing import Any
+import re
+from typing import Any, List, Dict
 from desktop_overlay.agent.tools.base import BaseTool, ToolResult
 
 # Import clean_text from service scripts if available
@@ -19,6 +20,30 @@ except ImportError:
     except ImportError:
         def clean_text(text, **kwargs):
             return text, {"removed_count": 0, "replaced_count": 0, "input_length": len(text), "output_length": len(text)}
+
+def extract_code_blocks(markdown_text: str) -> List[Dict[str, str]]:
+    """Extracts fenced markdown code blocks (e.g. ```python ... ```)."""
+    pattern = r"```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```"
+    matches = re.findall(pattern, markdown_text)
+    blocks = []
+    for lang, code in matches:
+        clean_lang = lang.strip().lower() or "python"
+        blocks.append({
+            "language": clean_lang,
+            "code": code.strip()
+        })
+    return blocks
+
+def extract_clean_code_or_answer(text: str) -> str:
+    """Extracts only the raw code if code blocks exist, otherwise returns the clean answer text."""
+    blocks = extract_code_blocks(text)
+    if blocks:
+        return "\n\n".join([b["code"] for b in blocks])
+    lines = text.strip().splitlines()
+    for line in lines:
+        if line.strip().lower().startswith("answer:"):
+            return line.strip().split(":", 1)[1].strip()
+    return text.strip()
 
 class TextCleanTool(BaseTool):
     name = "clean_watermarks"

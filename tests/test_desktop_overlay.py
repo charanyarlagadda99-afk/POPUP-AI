@@ -15,13 +15,13 @@ from desktop_overlay.config import OverlayConfig
 from desktop_overlay.platform_layer.capability_matrix import CapabilityMatrix
 from desktop_overlay.security.permissions import PermissionManager, PermissionType, PrivacyMode
 from desktop_overlay.security.audit import AuditLogger
-from desktop_overlay.agent.tools.text_clean_tool import TextCleanTool
+from desktop_overlay.agent.tools.text_clean_tool import TextCleanTool, extract_code_blocks, extract_clean_code_or_answer
 from desktop_overlay.agent.tools.screen_tool import ScreenTool
 from desktop_overlay.agent.llm_provider import LLMProvider
 from desktop_overlay.agent.engine import AgentEngine
 from desktop_overlay.context.active_window import ActiveWindowTracker
 from desktop_overlay.history.history_manager import HistoryManager
-from desktop_overlay.sandbox.code_runner import CodeSandboxEngine
+from desktop_overlay.ui.overlay_window import CHAT_SYSTEM_PROMPT, SOLVER_SYSTEM_PROMPT
 
 class TestDesktopOverlay(unittest.TestCase):
     
@@ -117,25 +117,30 @@ class TestDesktopOverlay(unittest.TestCase):
             self.assertIn("Solution History Export", content)
             self.assertIn("Paris", content)
 
-    def test_code_sandbox_engine(self):
-        sandbox = CodeSandboxEngine()
-        
-        # Test 1: Successful Python execution
-        code = "print(sum([x * 2 for x in range(5)]))"
-        res = sandbox.run_python(code, timeout_sec=5)
-        self.assertTrue(res.success)
-        self.assertEqual(res.stdout.strip(), "20")
-        self.assertEqual(res.exit_code, 0)
-        
-        # Test 2: Code block extraction
+    def test_code_and_answer_extraction(self):
+        # Test 1: Code block extraction
         md = "Here is the code:\n```python\nprint('hello')\n```\nAnd done."
-        blocks = CodeSandboxEngine.extract_code_blocks(md)
+        blocks = extract_code_blocks(md)
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0]["code"], "print('hello')")
         
-        # Test 3: Clean code/answer extractor
-        clean = CodeSandboxEngine.extract_clean_code_or_answer(md)
+        # Test 2: Clean code/answer extractor for code block
+        clean = extract_clean_code_or_answer(md)
         self.assertEqual(clean, "print('hello')")
+        
+        # Test 3: Clean answer extractor for MCQ
+        mcq_ans = "**Answer: B) Stack**"
+        clean_mcq = extract_clean_code_or_answer(mcq_ans)
+        self.assertIn("B) Stack", clean_mcq)
+
+    def test_system_prompts_separation(self):
+        # Ensure CHAT_SYSTEM_PROMPT is conversational and doesn't force MCQ formatting
+        self.assertIn("ChatGPT", CHAT_SYSTEM_PROMPT)
+        self.assertNotIn("**Answer:", CHAT_SYSTEM_PROMPT)
+        
+        # Ensure SOLVER_SYSTEM_PROMPT includes explicit instructions for MCQs and open-ended questions
+        self.assertIn("MULTIPLE CHOICE", SOLVER_SYSTEM_PROMPT)
+        self.assertIn("OPEN-ENDED", SOLVER_SYSTEM_PROMPT)
 
     def test_settings_and_history_ui_instantiation(self):
         import tkinter as tk

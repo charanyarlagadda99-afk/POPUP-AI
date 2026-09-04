@@ -338,7 +338,7 @@ class SettingsPanel(tk.Frame):
             ("F1", "Boss Key (Emergency Stealth Instant Hide)"),
             ("Ctrl + Shift + C", "Clean Invisible Watermarks & Homoglyphs from Clipboard"),
             ("Ctrl + Shift + N", "Auto-Type Next Block in Sequential Typer Queue"),
-            ("Ctrl + Enter", "Send Prompt / Execute Sandbox Code"),
+            ("Ctrl + Enter", "Send Prompt / Submit Question"),
             ("Esc", "Cancel Snip & Solve Region Selection")
         ]
         

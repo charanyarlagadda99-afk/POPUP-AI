@@ -1,4 +1,4 @@
-"""Expanded Conversational Assistant View with Code Sandbox, Auto-Paste, Ghost Mode, and History."""
+"""Expanded Conversational Assistant View with Auto-Paste, Ghost Mode, and History."""
 
 from __future__ import annotations
 import tkinter as tk
@@ -6,10 +6,9 @@ from tkinter import ttk
 from typing import Callable, Optional
 from desktop_overlay.config import THEMES, OverlayConfig
 from desktop_overlay.context.context_engine import ApplicationContext
-from desktop_overlay.sandbox.code_runner import CodeSandboxEngine
 
 class ExpandedAssistantView(tk.Frame):
-    """Full desktop AI assistant with live context tags, streaming output, code runner sandbox, auto-paste, and history."""
+    """Full desktop AI assistant with live context tags, streaming output, auto-paste, and history."""
     
     def __init__(
         self,
@@ -21,10 +20,8 @@ class ExpandedAssistantView(tk.Frame):
         on_stop: Callable[[], None],
         on_run_agent: Callable[[str], None],
         on_auto_paste: Callable[[], None],
-        on_run_sandbox: Callable[[str], None],
         on_toggle_ghost: Callable[[], None],
         on_open_history: Callable[[], None],
-        on_open_sandbox: Callable[[], None],
         on_open_palette: Callable[[], None],
         on_open_settings: Callable[[], None],
         on_open_permissions: Callable[[], None],
@@ -42,10 +39,8 @@ class ExpandedAssistantView(tk.Frame):
         self.on_stop = on_stop
         self.on_run_agent = on_run_agent
         self.on_auto_paste = on_auto_paste
-        self.on_run_sandbox = on_run_sandbox
         self.on_toggle_ghost = on_toggle_ghost
         self.on_open_history = on_open_history
-        self.on_open_sandbox = on_open_sandbox
         self.on_open_palette = on_open_palette
         self.on_open_settings = on_open_settings
         self.on_open_permissions = on_open_permissions
@@ -101,7 +96,6 @@ class ExpandedAssistantView(tk.Frame):
         tk.Button(top_bar, text="⚙️ Settings", command=self.on_open_settings, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         tk.Button(top_bar, text="🔍 Actions", command=self.on_open_palette, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         tk.Button(top_bar, text="📜 History", command=self.on_open_history, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8, "bold"), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
-        tk.Button(top_bar, text="🧩 Sandbox", command=self.on_open_sandbox, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8, "bold"), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         tk.Button(top_bar, text="📝 Typer", command=self.on_open_editor, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         tk.Button(top_bar, text="🪟 Ghost", command=self.on_toggle_ghost, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         
@@ -231,20 +225,6 @@ class ExpandedAssistantView(tk.Frame):
         self.btn_copy_resp = tk.Button(hdr_out, text="📋 Copy", command=self.copy_output, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=1, font=("Segoe UI", 8))
         self.btn_copy_resp.pack(side=tk.RIGHT, padx=(2, 0))
         
-        self.btn_run_sandbox_inline = tk.Button(
-            hdr_out,
-            text="▶ Run in Sandbox",
-            command=self._run_code_in_sandbox,
-            bg="#00AA44",
-            fg="#FFFFFF",
-            bd=0,
-            padx=8,
-            pady=1,
-            font=("Segoe UI", 8, "bold"),
-            cursor="hand2"
-        )
-        self.btn_run_sandbox_inline.pack(side=tk.RIGHT, padx=4)
-        
         self.txt_output = tk.Text(
             f_out,
             wrap=tk.WORD,
@@ -297,11 +277,6 @@ class ExpandedAssistantView(tk.Frame):
                 self.after(1500, lambda: self.btn_copy_resp.config(text="📋 Copy"))
         except Exception:
             pass
-
-    def _run_code_in_sandbox(self) -> None:
-        txt = self.get_output_text()
-        clean_code = CodeSandboxEngine.extract_clean_code_or_answer(txt)
-        self.on_run_sandbox(clean_code)
 
     def focus_input(self) -> None:
         self.txt_input.focus_set()
