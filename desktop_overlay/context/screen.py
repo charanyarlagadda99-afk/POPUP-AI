@@ -100,14 +100,30 @@ class ScreenCaptureEngine:
         except Exception as e:
             return ScreenContext(available=False, error=str(e))
 
-    def capture_region(self, bbox: tuple[int, int, int, int], run_ocr: bool = True) -> ScreenContext:
+    def capture_region(self, bbox: tuple, run_ocr: bool = True) -> ScreenContext:
         if not HAS_PIL and not HAS_MSS:
             return ScreenContext(available=False, error="Screenshot library not available")
         try:
             full_img = self._grab_screen_image()
-            img = full_img.crop(bbox)
+            if len(bbox) == 6:
+                x1, y1, x2, y2, sw, sh = bbox
+                if sw > 0 and sh > 0:
+                    scale_x = full_img.width / sw
+                    scale_y = full_img.height / sh
+                    crop_box = (
+                        max(0, int(x1 * scale_x)),
+                        max(0, int(y1 * scale_y)),
+                        min(full_img.width, int(x2 * scale_x)),
+                        min(full_img.height, int(y2 * scale_y))
+                    )
+                else:
+                    crop_box = bbox[:4]
+            else:
+                crop_box = bbox[:4]
+                
+            img = full_img.crop(crop_box)
             ctx = self._image_to_context(img, run_ocr=run_ocr)
-            ctx.region = bbox
+            ctx.region = crop_box
             return ctx
         except Exception as e:
             return ScreenContext(available=False, error=str(e))

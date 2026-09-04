@@ -70,4 +70,6 @@ class ScreenSnipper(tk.Toplevel):
         
         # If selection area is large enough (at least 15x15)
         if (x2 - x1) > 15 and (y2 - y1) > 15:
-            self.on_snip_completed((x1, y1, x2, y2))
+            sw = self.winfo_screenwidth()
+            sh = self.winfo_screenheight()
+            self.on_snip_completed((x1, y1, x2, y2, sw, sh))

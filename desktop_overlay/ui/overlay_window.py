@@ -479,7 +479,7 @@ class DesktopOverlayWindow:
         time.sleep(0.08)
         ScreenSnipper(self.root, on_snip_completed=self.handle_region_solve)
 
-    def handle_region_solve(self, bbox: tuple[int, int, int, int]) -> None:
+    def handle_region_solve(self, bbox: tuple) -> None:
         """Extracts OCR text from selected screen rectangle and solves the question directly."""
         self._cancel_stream = False
         self.popup_win.deiconify()
