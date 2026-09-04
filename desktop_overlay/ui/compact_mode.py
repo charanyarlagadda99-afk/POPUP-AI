@@ -180,7 +180,7 @@ class CompactLauncher(tk.Frame):
 
     def _show_menu(self, event) -> None:
         menu = tk.Menu(self, tearoff=0)
-        menu.add_command(label="✦ Toggle AI Assistant (Ctrl+H)", command=self.on_expand)
+        menu.add_command(label="✦ Toggle AI Assistant (Ctrl+Z)", command=self.on_expand)
         if self.on_palette:
             menu.add_command(label="🔍 Quick Actions", command=self.on_palette)
         if self.on_clean:

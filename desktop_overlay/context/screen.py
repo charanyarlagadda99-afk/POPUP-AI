@@ -42,9 +42,19 @@ def filter_screen_text(raw_text: str) -> str:
         return ""
         
     noise_phrases = [
-        "are you sure you want to paste",
-        "windows powershell",
-        "command prompt",
+        "pop-up ai",
+        "snip & solve",
+        "scan screen",
+        "auto-paste",
+        "ghost mode",
+        "run in sandbox",
+        "actions",
+        "typer",
+        "sandbox",
+        "history",
+        "settings",
+        "permissions",
+        "diagnostics",
         "desktop ai assistant",
         "ai response & solutions",
         "scan & solve screen",

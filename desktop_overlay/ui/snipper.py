@@ -22,6 +22,15 @@ class ScreenSnipper(tk.Toplevel):
         sh = self.winfo_screenheight()
         self.geometry(f"{sw}x{sh}+0+0")
         
+        try:
+            from desktop_overlay.platform_layer.win32_api import set_window_capture_protection
+            self.update_idletasks()
+            frame = self.wm_frame()
+            if frame:
+                set_window_capture_protection(int(frame, 16), True)
+        except Exception:
+            pass
+        
         # Canvas for drawing the selection rectangle
         self.canvas = tk.Canvas(self, bg="#000000", highlightthickness=0, cursor="cross")
         self.canvas.pack(fill=tk.BOTH, expand=True)

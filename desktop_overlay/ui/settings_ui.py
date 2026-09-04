@@ -332,7 +332,7 @@ class SettingsPanel(tk.Frame):
         tk.Label(card_hk, text="⌨️ Global Hotkeys & Shortcuts", bg=self.t["card"], fg=self.t["accent"], font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 6))
         
         shortcuts = [
-            ("Ctrl + H", "Summon / Hide Pop-up AI Assistant"),
+            ("Ctrl + Z", "Summon / Hide Pop-up AI Assistant"),
             ("Ctrl + Shift + V", "Auto-Paste Clean Solution directly into Active App"),
             ("Ctrl + Shift + G", "Toggle Ghost Mode (Click-Through Transparent Overlay)"),
             ("F1", "Boss Key (Emergency Stealth Instant Hide)"),

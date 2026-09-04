@@ -11,7 +11,7 @@ CONFIG_FILE = CONFIG_DIR / "settings.json"
 @dataclass
 class OverlayConfig:
     # Hotkeys
-    hotkey_summon: str = "ctrl+h"
+    hotkey_summon: str = "ctrl+z"
     hotkey_clean_clipboard: str = "ctrl+shift+c"
     hotkey_auto_type: str = "ctrl+shift+v"
     hotkey_next_block: str = "ctrl+shift+n"
@@ -88,7 +88,16 @@ class OverlayConfig:
             if provider != "Ollama":
                 self.api_base_url = base_url
             else:
-                self.ollama_url = base_url
+                if not base_url.endswith("/api/generate"):
+                    base = base_url.rstrip("/")
+                    if base.endswith("/v1"): base = base[:-3]
+                    elif base.endswith("/api"): base = base[:-4]
+                    self.ollama_url = f"{base}/api/generate"
+                else:
+                    self.ollama_url = base_url
+        else:
+            if provider == "Ollama":
+                self.ollama_url = "http://localhost:11434/api/generate"
         self.save()
 
     def get_display_engine_name(self) -> str:
@@ -114,6 +123,14 @@ class OverlayConfig:
                     config = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
             except Exception as e:
                 print(f"[Config] Failed to load config, using defaults: {e}")
+                
+        # Ensure ollama_url is always normalized to /api/generate
+        if not config.ollama_url or not config.ollama_url.endswith("/api/generate"):
+            base = config.ollama_url.rstrip("/") if config.ollama_url else "http://localhost:11434"
+            if base.endswith("/v1"): base = base[:-3]
+            elif base.endswith("/api"): base = base[:-4]
+            config.ollama_url = f"{base}/api/generate"
+            config.save()
                 
         # Populate api_keys map from legacy api_key if needed
         if config.api_key and config.ai_provider != "Ollama" and config.ai_provider not in config.api_keys:

@@ -63,7 +63,14 @@ class LLMProvider:
         on_token: Optional[Callable[[str], None]] = None,
         cancel_check: Optional[Callable[[], bool]] = None
     ) -> str:
-        url = self.config.ollama_url
+        raw_url = self.config.ollama_url.strip() if self.config.ollama_url else "http://localhost:11434/api/generate"
+        if not raw_url.endswith("/api/generate"):
+            base = raw_url.rstrip("/")
+            if base.endswith("/v1"): base = base[:-3]
+            elif base.endswith("/api"): base = base[:-4]
+            url = f"{base}/api/generate"
+        else:
+            url = raw_url
         model = self.config.ollama_model
         
         payload = {
@@ -132,7 +139,11 @@ class LLMProvider:
         cancel_check: Optional[Callable[[], bool]] = None
     ) -> str:
         """Streams response from OpenAI-compatible cloud endpoints (Groq, Grok, DeepSeek, OpenAI, OpenRouter)."""
-        url = self.config.api_base_url
+        raw_url = self.config.api_base_url.strip() if self.config.api_base_url else "https://api.groq.com/openai/v1/chat/completions"
+        if not raw_url.endswith("/chat/completions"):
+            url = f"{raw_url.rstrip('/')}/chat/completions"
+        else:
+            url = raw_url
         model = self.config.api_model
         api_key = self.config.api_key.strip()
         

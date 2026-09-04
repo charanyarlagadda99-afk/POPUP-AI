@@ -358,7 +358,7 @@ class ExpandedAssistantView(tk.Frame):
             self.config.set_provider("OpenAI", saved_key, "gpt-4o-mini", "https://api.openai.com/v1")
         elif selection.startswith("💻 "):
             model_name = selection.replace("💻 ", "").strip()
-            self.config.set_provider("Ollama", "", model_name, "http://localhost:11434/v1")
+            self.config.set_provider("Ollama", "", model_name, "http://localhost:11434/api/generate")
             self.config.ollama_model = model_name
         self.config.save()
         self.refresh_engine_display()

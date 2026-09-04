@@ -170,9 +170,30 @@ class DesktopOverlayWindow:
         self.resize_grip.bind("<Button-1>", self._start_resize)
         self.resize_grip.bind("<B1-Motion>", self._do_resize)
         
+        # Apply OS-level display affinity protection to prevent screen detection & flickering
+        self._apply_capture_protection()
+
         # Start withdrawn so only the dot is initially visible
         self.popup_win.withdraw()
         self.open_mode("expanded")
+
+    def _apply_capture_protection(self) -> None:
+        """Applies Windows OS-level display affinity (WDA_EXCLUDEFROMCAPTURE) to root and popup windows.
+        This ensures the overlay is invisible to all screenshots and screen-capture detection tools
+        without ever needing to hide/withdraw the window."""
+        try:
+            from desktop_overlay.platform_layer.win32_api import set_window_capture_protection
+            self.root.update_idletasks()
+            frame_root = self.root.wm_frame()
+            if frame_root:
+                set_window_capture_protection(int(frame_root, 16), True)
+            if self.popup_win:
+                self.popup_win.update_idletasks()
+                frame_popup = self.popup_win.wm_frame()
+                if frame_popup:
+                    set_window_capture_protection(int(frame_popup, 16), True)
+        except Exception:
+            pass
 
     def _create_subviews(self, theme_name: str) -> None:
         # 1. Main Assistant View
@@ -406,7 +427,7 @@ class DesktopOverlayWindow:
     def _setup_hotkeys(self) -> None:
         try:
             import keyboard
-            keyboard.add_hotkey("ctrl+h", lambda: self.root.after(0, self.toggle_assistant))
+            keyboard.add_hotkey(self.config.hotkey_summon, lambda: self.root.after(0, self.toggle_assistant))
             keyboard.add_hotkey("ctrl+shift+v", lambda: self.root.after(0, self.handle_auto_paste))
             keyboard.add_hotkey("ctrl+shift+g", lambda: self.root.after(0, self.toggle_ghost_mode))
             keyboard.add_hotkey("f1", lambda: self.root.after(0, self.toggle_boss_key))
@@ -416,7 +437,7 @@ class DesktopOverlayWindow:
             print(f"[Overlay] Global hotkey registration note: {e}")
 
     def toggle_assistant(self) -> None:
-        """Toggles the assistant popup appear, disappear, and reappear with Ctrl+H."""
+        """Toggles the assistant popup appear, disappear, and reappear with Ctrl+Z."""
         if self.popup_win and self.popup_win.winfo_viewable():
             self.popup_win.withdraw()
         else:
@@ -469,12 +490,7 @@ class DesktopOverlayWindow:
         
         if attach_screen:
             self.expanded_view.set_output("")
-            self.popup_win.withdraw()
-            self.root.update()
-            time.sleep(0.12)
             app_ctx = self.context_engine.collect(self.root, include_screen=True)
-            self.popup_win.deiconify()
-            self.popup_win.lift()
                 
             if app_ctx.screen and app_ctx.screen.ocr_text:
                 ocr_len = len(app_ctx.screen.ocr_text)
@@ -522,12 +538,7 @@ class DesktopOverlayWindow:
         """One-click automated screen scanning and direct problem solving."""
         self._cancel_stream = False
         self.expanded_view.set_output("")
-        self.popup_win.withdraw()
-        self.root.update()
-        time.sleep(0.12)
         app_ctx = self.context_engine.collect(self.root, include_screen=True)
-        self.popup_win.deiconify()
-        self.popup_win.lift()
         
         ocr_text = app_ctx.screen.ocr_text.strip() if (app_ctx.screen and app_ctx.screen.ocr_text) else ""
         if not ocr_text and app_ctx.clipboard_text:
@@ -582,16 +593,11 @@ class DesktopOverlayWindow:
     def start_snip_and_solve(self) -> None:
         """Opens interactive green box snipper so user can select their exact question."""
         self._cancel_stream = False
-        self.popup_win.withdraw()
-        self.root.update()
-        time.sleep(0.08)
         ScreenSnipper(self.root, on_snip_completed=self.handle_region_solve)
 
     def handle_region_solve(self, bbox: tuple) -> None:
         """Extracts OCR text from selected screen rectangle and solves the question directly."""
         self._cancel_stream = False
-        self.popup_win.deiconify()
-        self.popup_win.lift()
         self.expanded_view.set_output("🎯 Analyzing selected question region...\n")
         self.expanded_view.set_generating(True)
         
