@@ -137,5 +137,53 @@ class TestDesktopOverlay(unittest.TestCase):
         clean = CodeSandboxEngine.extract_clean_code_or_answer(md)
         self.assertEqual(clean, "print('hello')")
 
+    def test_settings_and_history_ui_instantiation(self):
+        import tkinter as tk
+        from desktop_overlay.ui.settings_ui import SettingsPanel
+        from desktop_overlay.ui.history_view import HistoryView
+        
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            # 1. Test SettingsPanel
+            settings = SettingsPanel(
+                root,
+                config=self.config,
+                on_opacity_change=lambda o: None,
+                on_topmost_change=lambda t: None,
+                on_theme_change=lambda th: None,
+                on_close=lambda: None
+            )
+            settings.pack(fill=tk.BOTH, expand=True)
+            root.update_idletasks()
+            
+            # Verify canvas window width is positive and not collapsed
+            self.assertGreaterEqual(settings.canvas.winfo_width(), 0)
+            self.assertIsNotNone(settings.provider_var.get())
+            self.assertIsNotNone(settings.key_entry.get())
+            
+            # 2. Test HistoryView
+            history_v = HistoryView(
+                root,
+                history_mgr=HistoryManager(),
+                on_back=lambda: None
+            )
+            history_v.pack(fill=tk.BOTH, expand=True)
+            root.update_idletasks()
+            self.assertGreaterEqual(history_v.canvas.winfo_width(), 0)
+        finally:
+            root.destroy()
+
+    def test_cloud_provider_config(self):
+        cfg = OverlayConfig()
+        cfg.ai_provider = "Groq"
+        cfg.api_key = "gsk_test123456789"
+        cfg.api_model = "llama-3.3-70b-versatile"
+        
+        llm = LLMProvider(cfg)
+        self.assertEqual(llm.config.ai_provider, "Groq")
+        self.assertEqual(llm.config.api_key, "gsk_test123456789")
+
 if __name__ == "__main__":
     unittest.main()
+

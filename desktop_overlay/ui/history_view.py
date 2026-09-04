@@ -123,15 +123,25 @@ class HistoryView(tk.Frame):
             "<Configure>",
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         )
-        self.canvas_window = self.canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw", width=620)
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.bind("<Configure>", lambda e: self.canvas.itemconfig(self.canvas_window, width=self.canvas.winfo_width()))
+        # Responsive width resize
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.canvas_window, width=max(e.width - 6, 460)))
+        
+        # Mousewheel scrolling
+        self._bind_mousewheel(self.canvas)
+        self._bind_mousewheel(self.scroll_frame)
         
         self.refresh()
+
+    def _bind_mousewheel(self, widget: tk.Widget) -> None:
+        def _on_wheel(e):
+            self.canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        widget.bind("<MouseWheel>", _on_wheel)
 
     def refresh(self) -> None:
         """Loads entries from SQLite and displays them."""

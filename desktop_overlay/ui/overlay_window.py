@@ -142,6 +142,21 @@ class DesktopOverlayWindow:
         self.view_frame = tk.Frame(self.popup_win, bg=self.t["bg"])
         self.view_frame.pack(fill=tk.BOTH, expand=True)
         
+        # Subviews container
+        self._current_mode = "expanded"
+        self._create_subviews(self.config.theme)
+        
+        # Bottom-Right Resize Grip
+        self.resize_grip = tk.Label(self.popup_win, text="⋰", bg=self.t["bg"], fg=self.t["fg_dim"], font=("Segoe UI", 9), cursor="size_nw_se")
+        self.resize_grip.place(relx=1.0, rely=1.0, anchor="se", x=-2, y=-2)
+        self.resize_grip.bind("<Button-1>", self._start_resize)
+        self.resize_grip.bind("<B1-Motion>", self._do_resize)
+        
+        # Start withdrawn so only the dot is initially visible
+        self.popup_win.withdraw()
+        self.open_mode("expanded")
+
+    def _create_subviews(self, theme_name: str) -> None:
         # 1. Main Assistant View
         self.expanded_view = ExpandedAssistantView(
             self.view_frame,
@@ -161,7 +176,7 @@ class DesktopOverlayWindow:
             on_open_permissions=lambda: self.open_mode("permissions"),
             on_open_diagnostics=lambda: self.open_mode("diagnostics"),
             on_open_editor=lambda: self.open_mode("editor"),
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         # 2. History View
@@ -169,14 +184,14 @@ class DesktopOverlayWindow:
             self.view_frame,
             history_mgr=self.history_mgr,
             on_back=lambda: self.open_mode("expanded"),
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         # 3. Sandbox View
         self.sandbox_view = SandboxView(
             self.view_frame,
             on_back=lambda: self.open_mode("expanded"),
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         # 4. Auxiliary Panels
@@ -184,13 +199,13 @@ class DesktopOverlayWindow:
             self.view_frame,
             on_cancel=self.agent.cancel,
             on_confirm=self.agent.confirm_action,
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         self.palette_view = CommandPalette(
             self.view_frame,
             on_action=self.handle_palette_action,
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         self.settings_view = SettingsPanel(
@@ -200,14 +215,14 @@ class DesktopOverlayWindow:
             on_topmost_change=self.apply_topmost,
             on_theme_change=self.apply_theme,
             on_close=lambda: self.open_mode("expanded"),
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         self.permission_view = PermissionCenter(
             self.view_frame,
             permissions=self.permissions,
             on_close=lambda: self.open_mode("expanded"),
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         self.diagnostics_view = DiagnosticsPanel(
@@ -216,23 +231,13 @@ class DesktopOverlayWindow:
             capabilities=self.capabilities,
             audit=self.audit,
             on_close=lambda: self.open_mode("expanded"),
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
         
         self.editor_view = EditorToolsView(
             self.view_frame,
-            theme_name=self.config.theme
+            theme_name=theme_name
         )
-        
-        # Bottom-Right Resize Grip
-        self.resize_grip = tk.Label(self.popup_win, text="⋰", bg=self.t["bg"], fg=self.t["fg_dim"], font=("Segoe UI", 9), cursor="size_nw_se")
-        self.resize_grip.place(relx=1.0, rely=1.0, anchor="se", x=-2, y=-2)
-        self.resize_grip.bind("<Button-1>", self._start_resize)
-        self.resize_grip.bind("<B1-Motion>", self._do_resize)
-        
-        # Start withdrawn so only the dot is initially visible
-        self.popup_win.withdraw()
-        self.open_mode("expanded")
 
     def _start_popup_drag(self, event) -> None:
         self._popup_drag_x = event.x
@@ -351,6 +356,19 @@ class DesktopOverlayWindow:
         self.btn_close.configure(bg=self.t["card"], fg=self.t["fg_dim"])
         self.btn_recess.configure(bg=self.t["card"], fg=self.t["fg_dim"])
         self.resize_grip.configure(bg=self.t["bg"], fg=self.t["fg_dim"])
+        self.view_frame.configure(bg=self.t["bg"])
+        
+        # Destroy and recreate subviews with new theme
+        current_mode = self._current_mode if hasattr(self, "_current_mode") else "expanded"
+        for v in (self.expanded_view, self.history_view, self.sandbox_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
+            v.destroy()
+        self._create_subviews(theme_name)
+        self.open_mode(current_mode)
+
+    def _get_active_model_name(self) -> str:
+        if self.config.ai_provider != "Ollama" and self.config.api_key.strip():
+            return f"{self.config.ai_provider}:{self.config.api_model}"
+        return self.config.ollama_model
 
     def cancel_generation(self) -> None:
         """Immediately stops the AI generation stream."""
@@ -390,6 +408,7 @@ class DesktopOverlayWindow:
         self.expanded_view.focus_input()
 
     def open_mode(self, mode: str) -> None:
+        self._current_mode = mode
         for v in (self.expanded_view, self.history_view, self.sandbox_view, self.agent_view, self.palette_view, self.settings_view, self.permission_view, self.diagnostics_view, self.editor_view):
             v.pack_forget()
             
@@ -433,7 +452,7 @@ class DesktopOverlayWindow:
                 
             if app_ctx.screen and app_ctx.screen.ocr_text:
                 ocr_len = len(app_ctx.screen.ocr_text)
-                self.expanded_view.set_output(f"📷 Screen scanned ({ocr_len} characters extracted). Analyzing with {self.config.ollama_model}...\n\n")
+                self.expanded_view.set_output(f"📷 Screen scanned ({ocr_len} characters extracted). Analyzing with {self._get_active_model_name()}...\n\n")
                 is_screen_solve = True
             else:
                 self.expanded_view.set_output("⚠️ Screen text could not be extracted.\n\n")
@@ -488,7 +507,7 @@ class DesktopOverlayWindow:
             self.root.after(0, lambda: self.expanded_view.set_generating(False))
             # Save to SQLite history
             self.history_mgr.add_entry(
-                model=self.config.ollama_model,
+                model=self._get_active_model_name(),
                 question_type="Prompt",
                 question_text=prompt,
                 answer_text="".join(full_out),
@@ -521,7 +540,7 @@ class DesktopOverlayWindow:
             return
             
         ocr_len = len(ocr_text)
-        self.expanded_view.set_output(f"✓ Screen scanned ({ocr_len} characters extracted via Windows OCR).\n🧠 Solving with {self.config.ollama_model}...\n\n")
+        self.expanded_view.set_output(f"✓ Screen scanned ({ocr_len} characters extracted via Windows OCR).\n🧠 Solving with {self._get_active_model_name()}...\n\n")
         
         images = []
         if app_ctx.screen and app_ctx.screen.image_base64:
@@ -580,7 +599,7 @@ class DesktopOverlayWindow:
             self.root.after(0, lambda: self.expanded_view.set_generating(False))
             # Save to SQLite history
             self.history_mgr.add_entry(
-                model=self.config.ollama_model,
+                model=self._get_active_model_name(),
                 question_type="Screen Scan",
                 question_text=ocr_text,
                 answer_text="".join(full_out),
@@ -614,7 +633,7 @@ class DesktopOverlayWindow:
             return
             
         ocr_len = len(ocr_text)
-        self.expanded_view.set_output(f"✓ Question captured ({ocr_len} characters).\n🧠 Solving with {self.config.ollama_model}...\n\n")
+        self.expanded_view.set_output(f"✓ Question captured ({ocr_len} characters).\n🧠 Solving with {self._get_active_model_name()}...\n\n")
         
         system_prompt = (
             "You are an expert universal desktop problem solver, quiz master, and senior software engineer.\n"
@@ -668,7 +687,7 @@ class DesktopOverlayWindow:
             self.root.after(0, lambda: self.expanded_view.set_generating(False))
             # Save to SQLite history
             self.history_mgr.add_entry(
-                model=self.config.ollama_model,
+                model=self._get_active_model_name(),
                 question_type="Snip & Solve",
                 question_text=ocr_text,
                 answer_text="".join(full_out),
