@@ -48,10 +48,11 @@ class ExpandedAssistantView(tk.Frame):
         self.on_open_editor = on_open_editor
         self.on_engine_change = on_engine_change
         self.is_generating = False
+        self.active_mode = "chat"  # "chat" (AI Assistant raw LLM) or "solver" (Scan & Answer system)
         
         # 1. TOP STATUS & CONTEXT TOOLBAR
         top_bar = tk.Frame(self, bg=self.t["bg"])
-        top_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        top_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 4))
         
         # Engine Status Badge
         is_cloud = (self.config.ai_provider != "Ollama" and self.config.api_key.strip())
@@ -99,17 +100,44 @@ class ExpandedAssistantView(tk.Frame):
         tk.Button(top_bar, text="📝 Typer", command=self.on_open_editor, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         tk.Button(top_bar, text="🪟 Ghost", command=self.on_toggle_ghost, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=5, pady=2, font=("Segoe UI", 8), activebackground=self.t["accent"]).pack(side=tk.RIGHT, padx=1)
         
-        # 2. INPUT AREA & FIXED ACTION BAR (Packed at BOTTOM first to guarantee visibility)
-        f_in = tk.Frame(self, bg=self.t["card"], bd=1, relief=tk.FLAT)
-        f_in.pack(side=tk.BOTTOM, fill=tk.X)
+        # 2. DEDICATED TWO-MODE TAB BAR (AI Assistant vs Scan & Answer)
+        self.tab_bar = tk.Frame(self, bg=self.t["bg"])
+        self.tab_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
         
-        hdr_in = tk.Frame(f_in, bg=self.t["card"], padx=6, pady=4)
-        hdr_in.pack(fill=tk.X)
-        tk.Label(hdr_in, text="💬 Ask or Instruct (Ctrl+Enter to send):", bg=self.t["card"], fg=self.t["accent"], font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT)
+        self.btn_tab_chat = tk.Button(
+            self.tab_bar,
+            text="💬 AI Assistant (Terminal LLM)",
+            command=lambda: self.switch_mode("chat"),
+            bd=0,
+            padx=10,
+            pady=4,
+            cursor="hand2"
+        )
+        self.btn_tab_chat.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 3))
+        
+        self.btn_tab_solver = tk.Button(
+            self.tab_bar,
+            text="🎯 Scan & Answer Mode",
+            command=lambda: self.switch_mode("solver"),
+            bd=0,
+            padx=10,
+            pady=4,
+            cursor="hand2"
+        )
+        self.btn_tab_solver.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(3, 0))
+        
+        # 3. INPUT AREA & FIXED ACTION BAR (Packed at BOTTOM first to guarantee visibility)
+        self.f_in = tk.Frame(self, bg=self.t["card"], bd=1, relief=tk.FLAT)
+        self.f_in.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        self.hdr_in = tk.Frame(self.f_in, bg=self.t["card"], padx=6, pady=4)
+        self.hdr_in.pack(fill=tk.X)
+        self.lbl_input_title = tk.Label(self.hdr_in, text="💬 Terminal Prompt (Ctrl+Enter to send):", bg=self.t["card"], fg=self.t["accent"], font=("Segoe UI", 8, "bold"))
+        self.lbl_input_title.pack(side=tk.LEFT)
         
         self.var_attach_screen = tk.BooleanVar(value=False)
         self.cb_screen = tk.Checkbutton(
-            hdr_in,
+            self.hdr_in,
             text="📷 Attach Screen Context",
             variable=self.var_attach_screen,
             bg=self.t["card"],
@@ -122,7 +150,7 @@ class ExpandedAssistantView(tk.Frame):
         self.cb_screen.pack(side=tk.RIGHT, padx=4)
         
         self.txt_input = tk.Text(
-            f_in,
+            self.f_in,
             height=3,
             wrap=tk.WORD,
             bg=self.t["input_bg"],
@@ -137,7 +165,7 @@ class ExpandedAssistantView(tk.Frame):
         self.txt_input.bind("<Control-Return>", lambda e: self._submit_prompt())
         
         # FIXED ACTION BUTTONS BAR (ALWAYS VISIBLE)
-        self.btn_bar = tk.Frame(f_in, bg=self.t["card"], padx=6, pady=5)
+        self.btn_bar = tk.Frame(self.f_in, bg=self.t["card"], padx=6, pady=5)
         self.btn_bar.pack(fill=tk.X)
         
         # 🎯 SNIP & SOLVE QUESTION
@@ -153,7 +181,6 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
         )
-        self.btn_snip.pack(side=tk.LEFT, padx=(0, 5))
         
         # 📸 FULL SCREEN SCAN & SOLVE
         self.btn_scan = tk.Button(
@@ -168,7 +195,6 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
         )
-        self.btn_scan.pack(side=tk.LEFT, padx=(0, 5))
         
         # ⚡ AUTO-PASTE SOLUTION (Ctrl+Shift+V)
         self.btn_auto_paste = tk.Button(
@@ -183,7 +209,6 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
         )
-        self.btn_auto_paste.pack(side=tk.LEFT)
         
         # Stop Generation Button (Hidden until AI starts generating)
         self.btn_stop = tk.Button(
@@ -199,7 +224,7 @@ class ExpandedAssistantView(tk.Frame):
             cursor="hand2"
         )
         
-        # Send Prompt Button
+        # Send / Solve Button
         self.btn_send = tk.Button(
             self.btn_bar,
             text="🚀 Send Prompt",
@@ -212,15 +237,15 @@ class ExpandedAssistantView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             cursor="hand2"
         )
-        self.btn_send.pack(side=tk.RIGHT)
         
-        # 3. OUTPUT RESPONSE DISPLAY (Takes all remaining middle space)
+        # 4. OUTPUT RESPONSE DISPLAY (Takes all remaining middle space)
         f_out = tk.Frame(self, bg=self.t["card"], bd=1, relief=tk.FLAT)
         f_out.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(0, 6))
         
         hdr_out = tk.Frame(f_out, bg=self.t["card"], padx=6, pady=4)
         hdr_out.pack(fill=tk.X)
-        tk.Label(hdr_out, text="✦ AI Response & Solutions", bg=self.t["card"], fg=self.t["success"], font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        self.lbl_hdr_output = tk.Label(hdr_out, text="✦ AI Terminal Output (Unrestricted)", bg=self.t["card"], fg=self.t["accent"], font=("Segoe UI", 9, "bold"))
+        self.lbl_hdr_output.pack(side=tk.LEFT)
         
         self.btn_copy_resp = tk.Button(hdr_out, text="📋 Copy", command=self.copy_output, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=6, pady=1, font=("Segoe UI", 8))
         self.btn_copy_resp.pack(side=tk.RIGHT, padx=(2, 0))
@@ -238,6 +263,73 @@ class ExpandedAssistantView(tk.Frame):
             exportselection=False
         )
         self.txt_output.pack(fill=tk.BOTH, expand=True)
+        
+        # Apply initial tab styling
+        self._update_mode_ui()
+
+    def switch_mode(self, mode: str) -> None:
+        """Switches between 'chat' (AI Assistant raw LLM) and 'solver' (Scan & Answer system)."""
+        self.active_mode = mode
+        self._update_mode_ui()
+
+    def _update_mode_ui(self) -> None:
+        """Updates tab buttons, headers, action buttons, and placeholders for the active mode."""
+        # Forget packed buttons in action bar
+        for w in (self.btn_snip, self.btn_scan, self.btn_auto_paste, self.btn_send):
+            w.pack_forget()
+
+        if self.active_mode == "chat":
+            # Tab 1: AI Assistant Mode (Raw LLM)
+            self.btn_tab_chat.config(
+                bg=self.t["accent"],
+                fg="#000000",
+                font=("Segoe UI", 9, "bold")
+            )
+            self.btn_tab_solver.config(
+                bg=self.t["btn"],
+                fg=self.t["fg_dim"],
+                font=("Segoe UI", 9)
+            )
+            self.lbl_hdr_output.config(
+                text="💬 AI Assistant (Raw LLM — Unrestricted)",
+                fg=self.t["accent"]
+            )
+            self.lbl_input_title.config(
+                text="💬 Prompt (Acts like LLM in Terminal):",
+                fg=self.t["accent"]
+            )
+            self.cb_screen.pack(side=tk.RIGHT, padx=4)
+            self.btn_send.config(text="🚀 Send Prompt", bg=self.t["accent"], fg="#000000")
+            self.btn_send.pack(side=tk.RIGHT)
+            self.focus_input()
+        else:
+            # Tab 2: Scan & Answer System Mode (Dedicated Problem Solver)
+            self.btn_tab_solver.config(
+                bg="#00AA44",
+                fg="#FFFFFF",
+                font=("Segoe UI", 9, "bold")
+            )
+            self.btn_tab_chat.config(
+                bg=self.t["btn"],
+                fg=self.t["fg_dim"],
+                font=("Segoe UI", 9)
+            )
+            self.lbl_hdr_output.config(
+                text="🎯 Screen Solver (Gathers Question → Direct Answer)",
+                fg="#00AA44"
+            )
+            self.lbl_input_title.config(
+                text="🎯 Type/Paste Question or use Screen Snip below:",
+                fg="#00AA44"
+            )
+            self.cb_screen.pack_forget()
+            
+            # Pack dedicated Screen Solver action buttons
+            self.btn_snip.pack(side=tk.LEFT, padx=(0, 5))
+            self.btn_scan.pack(side=tk.LEFT, padx=(0, 5))
+            self.btn_auto_paste.pack(side=tk.LEFT)
+            self.btn_send.config(text="🎯 Solve Question", bg="#00AA44", fg="#FFFFFF")
+            self.btn_send.pack(side=tk.RIGHT)
 
     def set_generating(self, generating: bool) -> None:
         self.is_generating = generating
@@ -249,8 +341,7 @@ class ExpandedAssistantView(tk.Frame):
             self.btn_auto_paste.config(state=tk.DISABLED)
         else:
             self.btn_stop.pack_forget()
-            self.btn_send.pack(side=tk.RIGHT)
-            self.btn_send.config(text="🚀 Send Prompt", state=tk.NORMAL)
+            self._update_mode_ui()
             self.btn_snip.config(state=tk.NORMAL)
             self.btn_scan.config(state=tk.NORMAL)
             self.btn_auto_paste.config(state=tk.NORMAL)
@@ -288,15 +379,18 @@ class ExpandedAssistantView(tk.Frame):
         if not prompt: return
         self.set_output("")
         self.set_generating(True)
-        self.on_send_prompt(prompt, self.var_attach_screen.get())
+        is_solver = (self.active_mode == "solver")
+        self.on_send_prompt(prompt, self.var_attach_screen.get(), is_solver)
 
     def _submit_snip_solve(self) -> None:
         if self.is_generating: return
+        self.switch_mode("solver")
         self.set_output("")
         self.on_snip_solve()
 
     def _submit_scan_solve(self) -> None:
         if self.is_generating: return
+        self.switch_mode("solver")
         self.set_output("")
         self.set_generating(True)
         self.on_scan_solve()

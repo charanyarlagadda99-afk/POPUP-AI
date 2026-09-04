@@ -9,6 +9,9 @@ class CommandPalette(tk.Frame):
     """Global fast action launcher with live filtering."""
     
     DEFAULT_ACTIONS = [
+        {"id": "mode_chat", "title": "💬 Switch to AI Assistant Mode", "desc": "Raw unrestricted terminal LLM chat mode (no system prompt)"},
+        {"id": "mode_solver", "title": "🎯 Switch to Scan & Answer Mode", "desc": "Dedicated screen problem solver (MCQ, code, tests)"},
+        {"id": "snip_solve", "title": "🎯 Snip & Solve Question Region", "desc": "Drag a green box around screen question to solve directly"},
         {"id": "summarize", "title": "📄 Summarize Active Context", "desc": "Summarizes active window content or clipboard"},
         {"id": "clean_watermarks", "title": "🛡️ Clean Watermarks & Homoglyphs", "desc": "Strips invisible chars and zero-width spaces"},
         {"id": "explain_screen", "title": "👁️ Explain What I'm Seeing", "desc": "Captures window and explains UI / code / errors"},

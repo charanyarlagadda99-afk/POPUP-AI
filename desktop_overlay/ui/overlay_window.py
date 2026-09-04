@@ -29,29 +29,21 @@ from desktop_overlay.ui.settings_ui import SettingsPanel
 from desktop_overlay.ui.history_view import HistoryView
 from desktop_overlay.ui.snipper import ScreenSnipper
 
-CHAT_SYSTEM_PROMPT = (
-    "You are an intelligent, helpful, and highly capable desktop AI assistant, like ChatGPT.\n"
-    "Answer the user's questions clearly, accurately, and comprehensively.\n"
-    "- For general questions, explanations, and concepts: provide clear, insightful, well-structured answers.\n"
-    "- For coding questions: provide clean, correct, well-explained code with markdown code blocks.\n"
-    "- For direct questions: answer directly and helpfully.\n"
-    "- Maintain a natural, polite, and intelligent tone."
-)
-
+# 🎯 DEDICATED SOLVER SYSTEM PROMPT (Used in Scan & Answer Mode)
 SOLVER_SYSTEM_PROMPT = (
-    "You are an expert, precise problem solver and AI assistant.\n"
-    "Analyze the provided question or screen content and respond according to the question type:\n\n"
-    "1. MULTIPLE CHOICE QUESTIONS (Contains options like A, B, C, D):\n"
-    "   - State the correct answer directly and concisely.\n"
+    "You are a dedicated, high-speed question and test solver.\n"
+    "Your only job is to gather the question from the provided screen/text and output ONLY the direct answer:\n\n"
+    "1. MULTIPLE CHOICE QUESTIONS (MCQ with options A, B, C, D or choices):\n"
+    "   - Output ONLY the direct correct answer on a single line.\n"
     "   - Format: **Answer: <Option Letter>) <Option Text>**\n"
-    "   - Do not include unnecessary fluff or filler.\n\n"
-    "2. CODING & ALGORITHMIC PROBLEMS (asks to write, solve, or implement code / algorithms / DSA):\n"
-    "   - Provide the complete, working code solution in a markdown code block.\n"
-    "   - Keep explanations concise.\n\n"
-    "3. OPEN-ENDED & GENERAL QUESTIONS (definitions, explanations, theory, descriptive questions):\n"
-    "   - Provide a clear, comprehensive, and well-structured answer like ChatGPT.\n"
-    "   - DO NOT fabricate MCQ options (A, B, C, D) if none were provided in the question.\n\n"
-    "4. STRICT RULE: Answer only the question provided. Do not generate fake subsequent questions or repeat the prompt."
+    "   - Absolutely NO explanations, NO reasoning, and NO filler text.\n"
+    "   - Example: **Answer: B) Stack**\n\n"
+    "2. CODING & PROGRAMMING QUESTIONS (asks to write, solve, or implement code / algorithms / DSA):\n"
+    "   - Output ONLY the clean, working code solution in a markdown code block with the appropriate language tag.\n"
+    "   - Absolutely NO conversational preamble or commentary.\n\n"
+    "3. GENERAL / CONCEPTUAL QUESTIONS:\n"
+    "   - Provide ONLY a direct, concise, and accurate answer.\n\n"
+    "4. STRICT RULE: Output ONLY the answer to the given question. NEVER invent, generate, or hallucinate subsequent questions, questionnaires, or tests."
 )
 
 class DesktopOverlayWindow:
@@ -472,7 +464,7 @@ class DesktopOverlayWindow:
         elif mode == "editor":
             self.editor_view.pack(fill=tk.BOTH, expand=True)
 
-    def handle_prompt(self, prompt: str, attach_screen: bool = False) -> None:
+    def handle_prompt(self, prompt: str, attach_screen: bool = False, is_solver_mode: bool = False) -> None:
         """Handles streaming prompt request."""
         self._cancel_stream = False
         images = []
@@ -493,7 +485,9 @@ class DesktopOverlayWindow:
         else:
             full_prompt = prompt
             
-        system_prompt = CHAT_SYSTEM_PROMPT
+        # In AI Assistant Mode: system_prompt = None (pure unrestricted terminal LLM pass-through)
+        # In Scan & Answer Mode: system_prompt = SOLVER_SYSTEM_PROMPT (dedicated question solver)
+        system_prompt = SOLVER_SYSTEM_PROMPT if is_solver_mode else None
         
         import threading
         def _stream():
@@ -680,7 +674,15 @@ class DesktopOverlayWindow:
         )
 
     def handle_palette_action(self, action_id: str) -> None:
-        if action_id == "summarize":
+        if action_id == "mode_chat":
+            self.open_mode("expanded")
+            self.expanded_view.switch_mode("chat")
+        elif action_id == "mode_solver":
+            self.open_mode("expanded")
+            self.expanded_view.switch_mode("solver")
+        elif action_id == "snip_solve":
+            self.start_snip_and_solve()
+        elif action_id == "summarize":
             self.open_mode("expanded")
             self.handle_prompt("Summarize the active context and any copied text.")
         elif action_id == "clean_watermarks":

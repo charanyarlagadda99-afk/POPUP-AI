@@ -31,7 +31,7 @@ class LLMProvider:
     def generate_stream(
         self,
         prompt: str,
-        system_prompt: str = "You are a helpful, capable desktop AI assistant. Provide concise, direct answers.",
+        system_prompt: Optional[str] = None,
         images: Optional[list[str]] = None,
         stop: Optional[list[str]] = None,
         on_token: Optional[Callable[[str], None]] = None,
@@ -39,6 +39,7 @@ class LLMProvider:
     ) -> str:
         """
         Streams response from active AI provider (Local Ollama or Cloud API).
+        If system_prompt is None, acts as an unrestricted, raw LLM in terminal mode.
         """
         if self.config.ai_provider != "Ollama" and self.config.api_key.strip():
             return self._generate_stream_openai_compatible(
@@ -61,7 +62,7 @@ class LLMProvider:
     def _generate_stream_ollama(
         self,
         prompt: str,
-        system_prompt: str,
+        system_prompt: Optional[str] = None,
         images: Optional[list[str]] = None,
         stop: Optional[list[str]] = None,
         on_token: Optional[Callable[[str], None]] = None,
@@ -87,10 +88,11 @@ class LLMProvider:
         payload = {
             "model": model,
             "prompt": prompt,
-            "system": system_prompt,
             "stream": True,
             "options": options
         }
+        if system_prompt:
+            payload["system"] = system_prompt
         model_lower = model.lower()
         supports_vision = any(v in model_lower for v in ["vision", "llava", "moondream", "minicpm", "bakllava"])
         if images and supports_vision:
@@ -129,7 +131,7 @@ class LLMProvider:
                 on_token(err_msg)
             return err_msg
         except urllib.error.URLError as e:
-            err_msg = f"[LLM Offline] Could not connect to Ollama at {url}.\nPlease ensure Ollama is running (`ollama run {model}`).\n\nError: {e}"
+            err_msg = f"[Ollama Connection Error]: {e}\n\n💡 Tip: Make sure Ollama is running (`ollama serve`) and model '{model}' is installed (`ollama pull {model}`)."
             if on_token:
                 on_token(err_msg)
             return err_msg
@@ -142,7 +144,7 @@ class LLMProvider:
     def _generate_stream_openai_compatible(
         self,
         prompt: str,
-        system_prompt: str,
+        system_prompt: Optional[str] = None,
         stop: Optional[list[str]] = None,
         on_token: Optional[Callable[[str], None]] = None,
         cancel_check: Optional[Callable[[], bool]] = None
@@ -156,12 +158,14 @@ class LLMProvider:
         model = self.config.api_model
         api_key = self.config.api_key.strip()
         
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        
         payload = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ],
+            "messages": messages,
             "stream": True,
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens

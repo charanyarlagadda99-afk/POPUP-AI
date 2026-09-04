@@ -21,7 +21,7 @@ from desktop_overlay.agent.llm_provider import LLMProvider
 from desktop_overlay.agent.engine import AgentEngine
 from desktop_overlay.context.active_window import ActiveWindowTracker
 from desktop_overlay.history.history_manager import HistoryManager
-from desktop_overlay.ui.overlay_window import CHAT_SYSTEM_PROMPT, SOLVER_SYSTEM_PROMPT
+from desktop_overlay.ui.overlay_window import SOLVER_SYSTEM_PROMPT
 
 class TestDesktopOverlay(unittest.TestCase):
     
@@ -133,14 +133,12 @@ class TestDesktopOverlay(unittest.TestCase):
         clean_mcq = extract_clean_code_or_answer(mcq_ans)
         self.assertIn("B) Stack", clean_mcq)
 
-    def test_system_prompts_separation(self):
-        # Ensure CHAT_SYSTEM_PROMPT is conversational and doesn't force MCQ formatting
-        self.assertIn("ChatGPT", CHAT_SYSTEM_PROMPT)
-        self.assertNotIn("**Answer:", CHAT_SYSTEM_PROMPT)
-        
-        # Ensure SOLVER_SYSTEM_PROMPT includes explicit instructions for MCQs and open-ended questions
+    def test_dual_mode_separation(self):
+        # AI Assistant mode has no restrictive prompt (None) for raw terminal behavior
+        # Scan & Answer mode uses SOLVER_SYSTEM_PROMPT
         self.assertIn("MULTIPLE CHOICE", SOLVER_SYSTEM_PROMPT)
-        self.assertIn("OPEN-ENDED", SOLVER_SYSTEM_PROMPT)
+        self.assertIn("**Answer:", SOLVER_SYSTEM_PROMPT)
+        self.assertIn("CODING & PROGRAMMING", SOLVER_SYSTEM_PROMPT)
 
     def test_settings_and_history_ui_instantiation(self):
         import tkinter as tk
