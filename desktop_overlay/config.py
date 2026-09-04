@@ -41,8 +41,8 @@ class OverlayConfig:
     # AI Engine
     ai_provider: str = "Ollama"  # "Ollama", "CustomAPI"
     ollama_url: str = "http://localhost:11434/api/generate"
-    ollama_model: str = "phi3"
-    available_models: list[str] = field(default_factory=lambda: ["phi3", "llama3.2", "llava", "llama3.2-vision", "moondream", "qwen2.5:3b", "mistral"])
+    ollama_model: str = "Qwen3.6:latest"
+    available_models: list[str] = field(default_factory=lambda: ["Qwen3.6:latest", "phi3:latest", "phi3", "llama3.2", "llava", "qwen2.5:3b", "mistral"])
     streaming: bool = True
     temperature: float = 0.7
     max_tokens: int = 1500
@@ -57,14 +57,31 @@ class OverlayConfig:
 
     @classmethod
     def load(cls) -> "OverlayConfig":
+        config = cls()
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+                    config = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
             except Exception as e:
                 print(f"[Config] Failed to load config, using defaults: {e}")
-        return cls()
+                
+        # Try dynamic local model discovery
+        try:
+            import urllib.request
+            req = urllib.request.Request("http://localhost:11434/api/tags", headers={"User-Agent": "DesktopAI/1.0"})
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                installed = [m["name"] for m in data.get("models", []) if "name" in m]
+                if installed:
+                    for m in installed:
+                        if m not in config.available_models:
+                            config.available_models.insert(0, m)
+                    if config.ollama_model not in installed:
+                        config.ollama_model = installed[0]
+        except Exception:
+            pass
+        return config
 
 THEMES = {
     "Light": {

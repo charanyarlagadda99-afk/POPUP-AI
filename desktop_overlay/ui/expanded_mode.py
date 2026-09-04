@@ -50,7 +50,21 @@ class ExpandedAssistantView(tk.Frame):
         self.model_var = tk.StringVar(value=self.config.ollama_model)
         self.model_menu = tk.OptionMenu(top_bar, self.model_var, *self.config.available_models, command=self._on_model_change)
         self.model_menu.config(bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, highlightthickness=0, font=("Segoe UI", 8, "bold"), activebackground=self.t["card"])
-        self.model_menu.pack(side=tk.LEFT, padx=(4, 8))
+        self.model_menu.pack(side=tk.LEFT, padx=(4, 2))
+        
+        self.btn_refresh = tk.Button(
+            top_bar,
+            text="🔄",
+            command=self.refresh_models,
+            bg=self.t["btn"],
+            fg=self.t["btn_fg"],
+            bd=0,
+            padx=4,
+            pady=1,
+            font=("Segoe UI", 8),
+            cursor="hand2"
+        )
+        self.btn_refresh.pack(side=tk.LEFT, padx=(0, 8))
         
         # Active Context Badge
         self.lbl_context_badge = tk.Label(
@@ -287,3 +301,20 @@ class ExpandedAssistantView(tk.Frame):
     def _on_model_change(self, model: str) -> None:
         self.config.ollama_model = model
         self.config.save()
+
+    def refresh_models(self) -> None:
+        """Dynamically queries Ollama for newly downloaded models and updates dropdown menu."""
+        from desktop_overlay.agent.llm_provider import LLMProvider
+        installed = LLMProvider.get_installed_models()
+        if installed:
+            self.config.available_models = installed
+            if self.config.ollama_model not in installed:
+                self.config.ollama_model = installed[0]
+            self.config.save()
+            self.model_var.set(self.config.ollama_model)
+            
+            menu = self.model_menu["menu"]
+            menu.delete(0, "end")
+            for model_name in self.config.available_models:
+                menu.add_command(label=model_name, command=lambda m=model_name: self._on_model_change(m))
+            self.set_output(f"✓ Model list refreshed from Ollama:\n{', '.join(installed)}")

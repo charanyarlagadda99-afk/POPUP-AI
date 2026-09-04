@@ -13,6 +13,21 @@ class LLMProvider:
     def __init__(self, config: OverlayConfig):
         self.config = config
 
+    @staticmethod
+    def get_installed_models(ollama_host: str = "http://localhost:11434") -> list[str]:
+        """Dynamically queries Ollama /api/tags for all installed local models."""
+        try:
+            url = f"{ollama_host.rstrip('/')}/api/tags"
+            req = urllib.request.Request(url, headers={"User-Agent": "DesktopAI/1.0"})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = [m["name"] for m in data.get("models", []) if "name" in m]
+                if models:
+                    return models
+        except Exception:
+            pass
+        return ["Qwen3.6:latest", "phi3", "llama3.2", "qwen2.5:3b", "llava", "mistral"]
+
     def generate_stream(
         self,
         prompt: str,
@@ -49,7 +64,7 @@ class LLMProvider:
         
         full_response = []
         try:
-            with urllib.request.urlopen(req, timeout=45) as response:
+            with urllib.request.urlopen(req, timeout=120) as response:
                 for line in response:
                     if cancel_check and cancel_check():
                         break
@@ -67,10 +82,10 @@ class LLMProvider:
             err_body = ""
             try:
                 err_body = e.read().decode("utf-8")
-            except:
+            except Exception:
                 pass
             if "does not support images" in err_body.lower() or "image" in err_body.lower():
-                err_msg = f"⚠️ [Vision Error]: The selected model '{model}' is a text-only model and cannot analyze images directly.\n\nTo analyze screenshots, switch the model dropdown to a vision-capable model (like 'llava' or 'llama3.2-vision') in Ollama:\n`ollama pull llava`"
+                err_msg = f"⚠️ [Vision Error]: The selected model '{model}' is a text-only model and cannot analyze images directly.\n\nTo analyze screenshots with raw pixels, switch the model dropdown to a vision-capable model (like 'llava' or 'llama3.2-vision') in Ollama:\n`ollama pull llava`"
             else:
                 err_msg = f"[Ollama Error {e.code}]: {e.reason}\n{err_body}"
             if on_token:
@@ -86,16 +101,3 @@ class LLMProvider:
             if on_token:
                 on_token(err_msg)
             return err_msg
-        except urllib.error.URLError as e:
-            err_msg = f"[LLM Offline] Could not connect to Ollama at {url}.\nPlease ensure Ollama is running (`ollama run {model}`).\n\nError: {e}"
-            if on_token:
-                on_token(err_msg)
-            return err_msg
-        except Exception as e:
-            err_msg = f"[LLM Error] {e}"
-            if on_token:
-                on_token(err_msg)
-            return err_msg
-
-    def generate_sync(self, prompt: str, system_prompt: str = "") -> str:
-        return self.generate_stream(prompt, system_prompt=system_prompt)
