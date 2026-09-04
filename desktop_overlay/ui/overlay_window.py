@@ -30,6 +30,24 @@ from desktop_overlay.ui.history_view import HistoryView
 from desktop_overlay.ui.sandbox_view import SandboxView
 from desktop_overlay.ui.snipper import ScreenSnipper
 
+SOLVER_SYSTEM_PROMPT = (
+    "You are an ultra-intelligent, precise AI desktop solver and problem solver.\n"
+    "CRITICAL INSTRUCTIONS ON ANSWERING FORMAT:\n"
+    "1. MULTIPLE CHOICE QUESTIONS (MCQs):\n"
+    "   - If the input is an MCQ or test question, identify the exact correct option immediately.\n"
+    "   - Format the very first line as:\n"
+    "     **Correct Option: <Option Letter>) <Option Text>**\n"
+    "   - Follow with a concise 1-2 sentence explanation of why it is correct.\n"
+    "   - CRITICAL RULE: NEVER output code, Python scripts, or implementation code for multiple-choice questions unless the question explicitly asks to write a program or function.\n\n"
+    "2. CODING & PROGRAMMING REQUESTS:\n"
+    "   - If the input asks to write, debug, or implement code, provide the full, clean, working code in markdown code blocks with the correct language identifier.\n"
+    "   - Add brief explanations and usage instructions.\n\n"
+    "3. MATH & CALCULATION QUESTIONS:\n"
+    "   - Show the key formula/steps concisely and state the final computed answer clearly.\n\n"
+    "4. GENERAL QUESTIONS & CONCEPTUAL EXPLANATIONS:\n"
+    "   - Provide direct, structured, accurate, and high-yield answers without unnecessary fluff."
+)
+
 class DesktopOverlayWindow:
     """Universal Desktop AI Overlay Window with permanent floating dot, Sandbox, Auto-Paste, Ghost Mode, and History."""
     
@@ -176,6 +194,7 @@ class DesktopOverlayWindow:
             on_open_permissions=lambda: self.open_mode("permissions"),
             on_open_diagnostics=lambda: self.open_mode("diagnostics"),
             on_open_editor=lambda: self.open_mode("editor"),
+            on_engine_change=self.on_engine_changed,
             theme_name=theme_name
         )
         
@@ -214,6 +233,7 @@ class DesktopOverlayWindow:
             on_opacity_change=self.apply_opacity,
             on_topmost_change=self.apply_topmost,
             on_theme_change=self.apply_theme,
+            on_save_config=self.on_engine_changed,
             on_close=lambda: self.open_mode("expanded"),
             theme_name=theme_name
         )
@@ -236,8 +256,15 @@ class DesktopOverlayWindow:
         
         self.editor_view = EditorToolsView(
             self.view_frame,
+            on_close=lambda: self.open_mode("expanded"),
             theme_name=theme_name
         )
+
+    def on_engine_changed(self) -> None:
+        """Callback triggered when the engine/provider/model is changed via dropdown or settings."""
+        self.llm.config = self.config
+        if hasattr(self, 'expanded_view'):
+            self.expanded_view.refresh_engine_display()
 
     def _start_popup_drag(self, event) -> None:
         self._popup_drag_x = event.x
@@ -461,7 +488,7 @@ class DesktopOverlayWindow:
         else:
             full_prompt = prompt
             
-        system_prompt = "You are a helpful, intelligent desktop AI assistant. Answer the user's questions, requests, and coding tasks accurately, directly, and clearly. If writing code, provide clean, complete, working code."
+        system_prompt = SOLVER_SYSTEM_PROMPT
         
         import threading
         def _stream():
@@ -521,7 +548,7 @@ class DesktopOverlayWindow:
         if app_ctx.screen and app_ctx.screen.image_base64:
             images.append(app_ctx.screen.image_base64)
             
-        system_prompt = "You are an intelligent desktop assistant. Analyze the screen text and provide direct, accurate answers or working code solutions."
+        system_prompt = SOLVER_SYSTEM_PROMPT
         full_prompt = f"Screen Text:\n{ocr_text}\n\nProvide the direct answer or solution."
         
         import threading
@@ -579,7 +606,7 @@ class DesktopOverlayWindow:
         ocr_len = len(ocr_text)
         self.expanded_view.set_output(f"✓ Question captured ({ocr_len} characters).\n🧠 Solving with {self._get_active_model_name()}...\n\n")
         
-        system_prompt = "You are an intelligent desktop assistant. Analyze the captured question or coding problem and provide the direct, accurate answer or solution."
+        system_prompt = SOLVER_SYSTEM_PROMPT
         full_prompt = ocr_text
         
         import threading

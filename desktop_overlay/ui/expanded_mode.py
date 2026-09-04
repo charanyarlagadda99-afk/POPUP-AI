@@ -30,6 +30,7 @@ class ExpandedAssistantView(tk.Frame):
         on_open_permissions: Callable[[], None],
         on_open_diagnostics: Callable[[], None],
         on_open_editor: Callable[[], None],
+        on_engine_change: Optional[Callable[[], None]] = None,
         theme_name: str = "Light"
     ):
         self.t = THEMES.get(theme_name, THEMES["Light"])
@@ -50,18 +51,37 @@ class ExpandedAssistantView(tk.Frame):
         self.on_open_permissions = on_open_permissions
         self.on_open_diagnostics = on_open_diagnostics
         self.on_open_editor = on_open_editor
+        self.on_engine_change = on_engine_change
         self.is_generating = False
         
         # 1. TOP STATUS & CONTEXT TOOLBAR
         top_bar = tk.Frame(self, bg=self.t["bg"])
         top_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
         
-        # Model Selector
-        tk.Label(top_bar, text="🤖 Model:", bg=self.t["bg"], fg=self.t["fg_dim"], font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
-        self.model_var = tk.StringVar(value=self.config.ollama_model)
-        self.model_menu = tk.OptionMenu(top_bar, self.model_var, *self.config.available_models, command=self._on_model_change)
+        # Engine Status Badge
+        is_cloud = (self.config.ai_provider != "Ollama" and self.config.api_key.strip())
+        badge_text = f"☁️ {self.config.ai_provider}" if is_cloud else "💻 Local"
+        badge_bg = "#00AA44" if is_cloud else self.t["btn"]
+        badge_fg = "#FFFFFF" if is_cloud else self.t["fg_dim"]
+        
+        self.lbl_badge = tk.Label(
+            top_bar,
+            text=badge_text,
+            bg=badge_bg,
+            fg=badge_fg,
+            font=("Segoe UI", 8, "bold"),
+            padx=6,
+            pady=2,
+            bd=0
+        )
+        self.lbl_badge.pack(side=tk.LEFT, padx=(0, 4))
+        
+        # Unified Model & Provider Selector
+        self.model_var = tk.StringVar(value=self._get_current_model_label())
+        choices = self._build_model_choices()
+        self.model_menu = tk.OptionMenu(top_bar, self.model_var, *choices, command=self._on_model_select)
         self.model_menu.config(bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, highlightthickness=0, font=("Segoe UI", 8, "bold"), activebackground=self.t["card"])
-        self.model_menu.pack(side=tk.LEFT, padx=(4, 2))
+        self.model_menu.pack(side=tk.LEFT, padx=(0, 2))
         
         self.btn_refresh = tk.Button(
             top_bar,
@@ -306,9 +326,59 @@ class ExpandedAssistantView(tk.Frame):
         self.set_generating(True)
         self.on_scan_solve()
 
-    def _on_model_change(self, model: str) -> None:
-        self.config.ollama_model = model
+    def _build_model_choices(self) -> list[str]:
+        choices = [
+            "⚡ Grok (grok-beta)",
+            "⚡ Groq (llama-3.3-70b-versatile)",
+            "⚡ DeepSeek (deepseek-chat)",
+            "⚡ OpenAI (gpt-4o-mini)",
+        ]
+        local_models = self.config.available_models or ["llama3.2:3b", "qwen2.5-coder:3b", "phi3:latest"]
+        for m in local_models:
+            choices.append(f"💻 {m}")
+        return choices
+
+    def _get_current_model_label(self) -> str:
+        if self.config.ai_provider != "Ollama" and self.config.api_key.strip():
+            return f"⚡ {self.config.ai_provider} ({self.config.api_model})"
+        return f"💻 {self.config.ollama_model}"
+
+    def _on_model_select(self, selection: str) -> None:
+        if selection.startswith("⚡ Grok"):
+            saved_key = self.config.get_api_key("Grok")
+            self.config.set_provider("Grok", saved_key, "grok-beta", "https://api.x.ai/v1")
+        elif selection.startswith("⚡ Groq"):
+            saved_key = self.config.get_api_key("Groq")
+            self.config.set_provider("Groq", saved_key, "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1")
+        elif selection.startswith("⚡ DeepSeek"):
+            saved_key = self.config.get_api_key("DeepSeek")
+            self.config.set_provider("DeepSeek", saved_key, "deepseek-chat", "https://api.deepseek.com")
+        elif selection.startswith("⚡ OpenAI"):
+            saved_key = self.config.get_api_key("OpenAI")
+            self.config.set_provider("OpenAI", saved_key, "gpt-4o-mini", "https://api.openai.com/v1")
+        elif selection.startswith("💻 "):
+            model_name = selection.replace("💻 ", "").strip()
+            self.config.set_provider("Ollama", "", model_name, "http://localhost:11434/v1")
+            self.config.ollama_model = model_name
         self.config.save()
+        self.refresh_engine_display()
+        if self.on_engine_change:
+            self.on_engine_change()
+
+    def refresh_engine_display(self) -> None:
+        """Updates the engine badge, selected model label, and dropdown menu choices."""
+        is_cloud = (self.config.ai_provider != "Ollama" and self.config.api_key.strip())
+        badge_text = f"☁️ {self.config.ai_provider}" if is_cloud else "💻 Local"
+        badge_bg = "#00AA44" if is_cloud else self.t["btn"]
+        badge_fg = "#FFFFFF" if is_cloud else self.t["fg_dim"]
+        self.lbl_badge.config(text=badge_text, bg=badge_bg, fg=badge_fg)
+        self.model_var.set(self._get_current_model_label())
+        
+        # Rebuild option menu
+        menu = self.model_menu["menu"]
+        menu.delete(0, "end")
+        for choice in self._build_model_choices():
+            menu.add_command(label=choice, command=lambda c=choice: self._on_model_select(c))
 
     def refresh_models(self) -> None:
         """Dynamically queries Ollama for newly downloaded models and updates dropdown menu."""
@@ -316,13 +386,10 @@ class ExpandedAssistantView(tk.Frame):
         installed = LLMProvider.get_installed_models()
         if installed:
             self.config.available_models = installed
-            if self.config.ollama_model not in installed:
+            if self.config.ai_provider == "Ollama" and self.config.ollama_model not in installed:
                 self.config.ollama_model = installed[0]
             self.config.save()
-            self.model_var.set(self.config.ollama_model)
-            
-            menu = self.model_menu["menu"]
-            menu.delete(0, "end")
-            for model_name in self.config.available_models:
-                menu.add_command(label=model_name, command=lambda m=model_name: self._on_model_change(m))
+            self.refresh_engine_display()
             self.set_output(f"✓ Model list refreshed from Ollama:\n{', '.join(installed)}")
+        else:
+            self.refresh_engine_display()

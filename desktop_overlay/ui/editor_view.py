@@ -29,15 +29,54 @@ except ImportError:
 class EditorToolsView(tk.Frame):
     """Integrates Unicode watermark cleaner, diff viewer, and upgraded sequential block typer."""
     
-    def __init__(self, master, theme_name: str = "Dark"):
+    def __init__(self, master, on_close: Optional[Callable[[], None]] = None, theme_name: str = "Dark"):
         self.t = THEMES.get(theme_name, THEMES["Dark"])
         super().__init__(master, bg=self.t["bg"], padx=10, pady=10)
+        self.on_close = on_close
         
         self.custom_regex = tk.StringVar(value="")
         self.block_queue: list[str] = []
         self.current_block_idx = 0
         self.block_win: Optional[tk.Toplevel] = None
         self._is_typing = False
+        
+        # 0. Top Header with Back Button
+        if self.on_close:
+            hdr_top = tk.Frame(self, bg=self.t["bg"])
+            hdr_top.pack(fill=tk.X, pady=(0, 6))
+            
+            tk.Button(
+                hdr_top,
+                text="← Back to Assistant",
+                command=self.on_close,
+                bg=self.t["btn"],
+                fg=self.t["btn_fg"],
+                bd=0,
+                padx=10,
+                pady=3,
+                font=("Segoe UI", 9, "bold"),
+                cursor="hand2"
+            ).pack(side=tk.LEFT)
+            
+            tk.Label(
+                hdr_top,
+                text="📝 Watermark Cleaner & Typer",
+                bg=self.t["bg"],
+                fg=self.t["accent"],
+                font=("Segoe UI", 11, "bold")
+            ).pack(side=tk.LEFT, padx=10)
+            
+            tk.Button(
+                hdr_top,
+                text="✕ Close",
+                command=self.on_close,
+                bg=self.t["btn"],
+                fg=self.t["btn_fg"],
+                bd=0,
+                padx=8,
+                pady=2,
+                cursor="hand2"
+            ).pack(side=tk.RIGHT)
         
         # Split input and output panes
         paned = tk.PanedWindow(self, orient=tk.VERTICAL, bg=self.t["bg"], bd=0)

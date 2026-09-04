@@ -48,10 +48,53 @@ class OverlayConfig:
     api_key: str = ""
     api_base_url: str = "https://api.groq.com/openai/v1/chat/completions"
     api_model: str = "llama-3.3-70b-versatile"
+    api_keys: dict[str, str] = field(default_factory=dict)
+    provider_models: dict[str, str] = field(default_factory=dict)
     
     streaming: bool = True
     temperature: float = 0.7
     max_tokens: int = 1500
+
+    def get_api_key(self, provider: str) -> str:
+        if self.api_keys and provider in self.api_keys:
+            return self.api_keys[provider]
+        if provider == self.ai_provider:
+            return self.api_key
+        return ""
+
+    def set_provider(self, provider: str, key: str = "", model: str = "", base_url: str = "") -> None:
+        self.ai_provider = provider
+        if key:
+            self.api_keys[provider] = key
+            self.api_key = key
+        elif provider in self.api_keys:
+            self.api_key = self.api_keys[provider]
+        else:
+            self.api_key = ""
+            
+        if model:
+            self.provider_models[provider] = model
+            if provider != "Ollama":
+                self.api_model = model
+            else:
+                self.ollama_model = model
+        elif provider in self.provider_models:
+            if provider != "Ollama":
+                self.api_model = self.provider_models[provider]
+            else:
+                self.ollama_model = self.provider_models[provider]
+                
+        if base_url:
+            if provider != "Ollama":
+                self.api_base_url = base_url
+            else:
+                self.ollama_url = base_url
+        self.save()
+
+    def get_display_engine_name(self) -> str:
+        if self.ai_provider != "Ollama" and self.api_key.strip():
+            return f"{self.ai_provider} ({self.api_model})"
+        return f"Ollama ({self.ollama_model})"
 
     def save(self) -> None:
         try:
@@ -72,6 +115,10 @@ class OverlayConfig:
             except Exception as e:
                 print(f"[Config] Failed to load config, using defaults: {e}")
                 
+        # Populate api_keys map from legacy api_key if needed
+        if config.api_key and config.ai_provider != "Ollama" and config.ai_provider not in config.api_keys:
+            config.api_keys[config.ai_provider] = config.api_key
+            
         # Try dynamic local model discovery
         try:
             import urllib.request

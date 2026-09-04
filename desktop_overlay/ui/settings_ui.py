@@ -65,6 +65,7 @@ class SettingsPanel(tk.Frame):
         on_topmost_change: Callable[[bool], None],
         on_theme_change: Callable[[str], None],
         on_close: Callable[[], None],
+        on_save_config: Optional[Callable[[], None]] = None,
         theme_name: str = "Light"
     ):
         self.t = THEMES.get(theme_name, THEMES["Light"])
@@ -74,10 +75,26 @@ class SettingsPanel(tk.Frame):
         self.on_topmost_change = on_topmost_change
         self.on_theme_change = on_theme_change
         self.on_close = on_close
+        self.on_save_config = on_save_config
         
-        # 1. HEADER
+        # 1. HEADER WITH PROMINENT BACK BUTTON
         hdr = tk.Frame(self, bg=self.t["bg"])
         hdr.pack(fill=tk.X, pady=(0, 8))
+        
+        tk.Button(
+            hdr,
+            text="← Back to Assistant",
+            command=self.on_close,
+            bg=self.t["btn"],
+            fg=self.t["btn_fg"],
+            bd=0,
+            padx=10,
+            pady=3,
+            font=("Segoe UI", 9, "bold"),
+            activebackground=self.t["accent"],
+            cursor="hand2"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
         tk.Label(
             hdr,
             text="⚙️ Pop-up AI Settings & API Keys",
@@ -346,14 +363,26 @@ class SettingsPanel(tk.Frame):
     def _on_preset_change(self, preset_name: str) -> None:
         preset = PROVIDER_PRESETS.get(preset_name)
         if not preset: return
+        prov = preset["provider"]
         self.url_entry.delete(0, tk.END)
         self.url_entry.insert(0, preset["url"])
+        
+        # Load saved model or default preset model
+        saved_model = self.config.provider_models.get(prov, preset["model"])
         self.model_entry.delete(0, tk.END)
-        self.model_entry.insert(0, preset["model"])
-        if preset["provider"] == "Ollama":
+        self.model_entry.insert(0, saved_model)
+        
+        # Automatically load saved API key for this provider
+        saved_key = self.config.get_api_key(prov)
+        self.key_entry.delete(0, tk.END)
+        self.key_entry.insert(0, saved_key)
+        
+        if prov == "Ollama":
             self.lbl_conn_status.config(text="Local Ollama selected (No API Key required)", fg=self.t["success"])
         else:
-            self.lbl_conn_status.config(text=f"Please enter your {preset['provider']} API key above", fg=self.t["accent"])
+            status_text = f"✓ Saved {prov} API Key loaded" if saved_key else f"Please enter your {prov} API key above"
+            status_fg = self.t["success"] if saved_key else self.t["accent"]
+            self.lbl_conn_status.config(text=status_text, fg=status_fg)
 
     def _toggle_key_visibility(self) -> None:
         self.key_show = not self.key_show
@@ -365,19 +394,19 @@ class SettingsPanel(tk.Frame):
         preset = PROVIDER_PRESETS.get(preset_name, PROVIDER_PRESETS["Local Ollama"])
         
         prov = preset["provider"]
-        self.config.ai_provider = prov
-        self.config.api_key = self.key_entry.get().strip()
+        key = self.key_entry.get().strip()
+        url = self.url_entry.get().strip()
+        model = self.model_entry.get().strip()
         
-        if prov == "Ollama":
-            self.config.ollama_url = self.url_entry.get().strip()
-            self.config.ollama_model = self.model_entry.get().strip()
-        else:
-            self.config.api_base_url = self.url_entry.get().strip()
-            self.config.api_model = self.model_entry.get().strip()
+        self.config.set_provider(prov, key=key, model=model, base_url=url)
+        if self.on_save_config:
+            self.on_save_config()
             
-        self.config.save()
-        self.lbl_conn_status.config(text=f"✓ Saved: {prov} ({self.model_entry.get().strip()})", fg=self.t["success"])
-        messagebox.showinfo("Saved", f"AI Provider set to '{prov}' with model '{self.model_entry.get().strip()}'!\nSettings saved successfully.")
+        self.lbl_conn_status.config(text=f"✓ Active Engine: {prov} ({model})", fg=self.t["success"])
+        messagebox.showinfo(
+            "Settings Saved",
+            f"AI Engine successfully switched to:\n{prov} • Model: {model}\n\nYour active model has been updated on the main assistant toolbar!"
+        )
 
     def _test_connection(self) -> None:
         preset_name = self.provider_var.get()

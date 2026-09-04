@@ -22,9 +22,23 @@ class DiagnosticsPanel(tk.Frame):
         # Header
         hdr = tk.Frame(self, bg=self.t["bg"])
         hdr.pack(fill=tk.X, pady=(0, 10))
+        
+        tk.Button(
+            hdr,
+            text="← Back to Assistant",
+            command=self.on_close,
+            bg=self.t["btn"],
+            fg=self.t["btn_fg"],
+            bd=0,
+            padx=10,
+            pady=3,
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
         tk.Label(hdr, text="🔍 System Diagnostics & Observability", bg=self.t["bg"], fg=self.t["accent"], font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
-        tk.Button(hdr, text="↻ Refresh", command=self.refresh, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=8, pady=2).pack(side=tk.LEFT, padx=10)
-        tk.Button(hdr, text="✕ Close", command=self.on_close, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=8, pady=2).pack(side=tk.RIGHT)
+        tk.Button(hdr, text="↻ Refresh", command=self.refresh, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=8, pady=2, cursor="hand2").pack(side=tk.LEFT, padx=10)
+        tk.Button(hdr, text="✕ Close", command=self.on_close, bg=self.t["btn"], fg=self.t["btn_fg"], bd=0, padx=8, pady=2, cursor="hand2").pack(side=tk.RIGHT)
         
         # Diagnostics Text Display
         self.txt = tk.Text(
